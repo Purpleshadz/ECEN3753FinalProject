@@ -34,7 +34,7 @@
 #include "FIFO.h"
 
 #define SLIDER_PERIOD 10
-#define LCD_PERIOD 25
+#define LCD_PERIOD 50
 #define PHYSICS_PERIOD 25
 #define LED1_PERIOD 5
 
@@ -558,9 +558,12 @@ void app_init(void)
 
   // Initialize our LCD system
   LCD_init();
-
+  // Mutex Creation
   OSMutexCreate(&buttonStructMutex, "button mutex", &err);
   while (err.Code != RTOS_ERR_NONE) {}
+  OSMutexCreate(&sliderMutex, "Slider Muted", &err);
+  while (err.Code != RTOS_ERR_NONE) {}
+  // Timer Creation
   OSTmrCreate(&physicsTimer, "Physics Timer", 0, PHYSICS_PERIOD, OS_OPT_TMR_PERIODIC, &physicsTimerCallback, DEF_NULL, &err);
   while (err.Code != RTOS_ERR_NONE) {}
   OSTmrCreate(&LCDTimer, "LCD Timer", 0, LCD_PERIOD, OS_OPT_TMR_PERIODIC, &LCDTimerCallback, DEF_NULL, &err);
@@ -569,18 +572,31 @@ void app_init(void)
   while (err.Code != RTOS_ERR_NONE) {}
   OSTmrCreate(&LED0Timer, "Slider Timer", 0, LED1_PERIOD, OS_OPT_TMR_PERIODIC, &LED0TimerCallback, DEF_NULL, &err);
   while (err.Code != RTOS_ERR_NONE) {}
+  // Semaphore Creation
   OSSemCreate(&buttonSem, "Button Semaphore", 0, &err);
   while (err.Code != RTOS_ERR_NONE) {}
   OSSemCreate(&sliderSem, "Slider Semaphore", 0, &err);
+  while (err.Code != RTOS_ERR_NONE) {}
+  OSSemCreate(&physicsSem, "LED0 Semaphore", 0, &err);
+  while (err.Code != RTOS_ERR_NONE) {}
+  OSSemCreate(&LCDSem, "LCD Semaphore", 0, &err);
+  while (err.Code != RTOS_ERR_NONE) {}
   idleTaskCreate();
   sliderTaskCreate();
-  // LCDTaskCreate();
-  // LED0OutputTaskCreate();
-  // LED1OutputTaskCreate();
+   LCDTaskCreate();
+   LED0OutputTaskCreate();
+   LED1OutputTaskCreate();
   buttonTaskCreate();
 
   OSStart(&err);
   while (err.Code != RTOS_ERR_NONE) {}
   OSTmrStart(&LED0Timer, &err);
   while (err.Code != RTOS_ERR_NONE) {}
+    OSTmrStart(&LCDTimer, &err);
+    while (err.Code != RTOS_ERR_NONE) {}
+    OSTmrStart(&physicsTimer, &err);
+    while (err.Code != RTOS_ERR_NONE) {}
+    OSTmrStart(&sliderTimer, &err);
+    while (err.Code != RTOS_ERR_NONE) {}
+
 }
