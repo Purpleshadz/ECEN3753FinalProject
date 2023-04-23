@@ -24,6 +24,7 @@
 #include <em_emu.h>
 #include <string.h>
 #include <os_trace.h>
+#include <math.h>
 
 #include "sl_board_control.h"
 #include "em_assert.h"
@@ -38,154 +39,12 @@
 #define LED0_PERIOD 50
 #define LED1_PERIOD 500
 #define PHYSICS_VERSION 1
-// Variables to allow for easy tuning of game
-int gravity = -10;
-int screenSize = 128;
-struct physicsConstants physicsConstantsInit(void);
-struct physicsConstants physicsConstantsInit(void) {
-    struct physicsConstants val;
-    if (PHYSICS_VERSION == 1) {
-        val = { // Normal Version
-            .physicsPeriod = 50,
-            .sliderPierod = 25;
-            .lcdPeriod = 100;
-            .canyonSize = screenSize;
-            .castleConst = {
-                .castleHeight = screenSize * .75,
-                .foundationHitsRequired = 3,
-                .foundationDepth = 21
-            }
-            .satchelConst = {
-                .limitingMethod = AlwaysOne,
-                .satchelDisplayDiameter = 7,
-                .throwPeriod = 10,
-                .maxInFlight = 2,
-                .maxInFlightPeriod = 10
-                .satchelWeight = 1000;
-            }
-            .platformConst = {
-                .maxPlatformForce = 5000,
-                .platformMass = 100,
-                .platformLength = 16,
-                .maxPlatformBounceSpeed = 5000,
-                .maxPlatformSpeed = 5000
-            }
-            .shieldConst = {
-                .shieldEffectiveRange = 20,
-                .shieldActivationEnergy = 30
-            }
-            .railGunConst = {
-                .railgunAngle = 3*pi/4 * 100,
-                .shotMass = 50,
-                .shotRadius = 5
-            }
-            .generatorConst = {
-                .energyCapacity = 50,
-                .maxShotPower = 20
-            }
-        }
-    } else if (PHYSICS_VERSION == 2) {
-        val = { // Suggested Version
-            .physicsPeriod = 50,
-            .sliderPierod = 150;
-            .lcdPeriod = 100;
-            .canyonSize = 100000;
-            .castleConst = {
-                .castleHeight = 5000,
-                .foundationHitsRequired = 2,
-                .foundationDepth = 5000
-            }
-            .satchelConst = {
-                .limitingMethod = AlwaysOne,
-                .satchelDisplayDiameter = 10,
-                .throwPeriod = 1000,
-                .maxInFlight = 2,
-                .maxInFlightPeriod = 500
-                .satchelWeight = 1000;
-            }
-            .platformConst = {
-                .maxPlatformForce = 20000000,
-                .platformMass = 100,
-                .platformLength = 10000,
-                .maxPlatformBounceSpeed = 50000,
-                .maxPlatformSpeed = 50000
-            }
-            .shieldConst = {
-                .shieldEffectiveRange = 15000,
-                .shieldActivationEnergy = 30000
-            }
-            .railGunConst = {
-                .railgunAngle = 800,
-                .shotMass = 50,
-                .shotRadius = 5
-            }
-            .generatorConst = {
-                .energyCapacity = 50000,
-                .maxShotPower = 20000
-            }
-        }
-    } else if (PHYSICS_VERSION == 3) { 
-        val = { // Normal Version
-            .physicsPeriod = 50,
-            .sliderPierod = 25;
-            .lcdPeriod = 100;
-            .canyonSize = screenSize;
-            .castleConst = {
-                .castleHeight = screenSize * .75,
-                .foundationHitsRequired = 3,
-                .foundationDepth = 20
-            }
-            .satchelConst = {
-                .limitingMethod = AlwaysOne,
-                .satchelDisplayDiameter = 7,
-                .throwPeriod = 10,
-                .maxInFlight = 2,
-                .maxInFlightPeriod = 10
-                .satchelWeight = 1000;
-            }
-            .platformConst = {
-                .maxPlatformForce = 5000,
-                .platformMass = 100,
-                .platformLength = 16,
-                .maxPlatformBounceSpeed = 5000,
-                .maxPlatformSpeed = 5000
-            }
-            .shieldConst = {
-                .shieldEffectiveRange = 20,
-                .shieldActivationEnergy = 30
-            }
-            .railGunConst = {
-                .railgunAngle = 3*pi/4 * 100,
-                .shotMass = 50,
-                .shotRadius = 5
-            }
-            .generatorConst = {
-                .energyCapacity = 50,
-                .maxShotPower = 20
-            }
-        }
-    }
-    // Scale the physconsts to the screen size using ratio
-    // Allows for any desired values but immediately scales them to the screen size
-    int ratio = val.canyonSize / screenSize;
-    val.canyonSize = screenSize;
-    val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
-    val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
-    val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
-    val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
-    val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
-    val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
-    val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
-    val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
-    val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
-    return val;
-}
 
 struct castleConstants {
     int castleHeight;
     int foundationHitsRequired;
     int foundationDepth;
-}
+};
 enum limitingMethod {AlwaysOne, MaxInFlight, PeriodicThrowTime};
 struct satchelConstants {
     int limitingMethod;
@@ -194,27 +53,27 @@ struct satchelConstants {
     int maxInFlight;
     int maxInFlightPeriod; // in amount of physics periods
     int satchelWeight;
-}
+};
 struct platformConstants {
     int maxPlatformForce;
     int platformMass;
     int platformLength;
     int maxPlatformBounceSpeed;
     int maxPlatformSpeed;
-}
+};
 struct shieldConstants {
     int shieldEffectiveRange;
     int shieldActivationEnergy;
-}
+};
 struct railGunConstants{
     int railgunAngle;
     int shotMass;
     int shotRadius;
-}
+};
 struct generatorCosntants{
     int energyCapacity;
-    int maxShotPower;    
-}
+    int maxShotPower;
+};
 struct physicsConstants {
     int physicsPeriod;
     int sliderPeriod;
@@ -228,12 +87,205 @@ struct physicsConstants {
     struct generatorCosntants generatorConst;
 } physConsts;
 
+OS_MUTEX buttonStructMutex;
+OS_SEM buttonSem;
+struct buttonStateStruct buttonStates;
 
-bool below50 = true;
-bool below100 = false;
-
+struct sliderState {
+  bool farLeft;
+  bool left;
+  bool right;
+  bool farRight;
+};
+struct sliderState sliderState;
+OS_MUTEX sliderMutex;
 OS_TMR sliderTimer;
 OS_SEM sliderSem;
+
+OS_TMR LCDTimer;
+OS_SEM LCDSem;
+
+struct buttonStateStruct {
+  bool button0State;
+  bool button1State;
+  bool button0Change;
+  bool button1Change;
+};
+
+OS_TMR LED0Timer;
+OS_TMR LED1Timer;
+
+// Variables to allow for easy tuning of game
+int gravity = -10;
+int screenSize = 128;
+struct physicsConstants physicsConstantsInit(void);
+struct physicsConstants physicsConstantsInit(void) {
+    // struct physicsConstants val;
+    if (PHYSICS_VERSION == 1) {
+        struct physicsConstants val = { // Normal Version
+            .physicsPeriod = 50,
+            .sliderPeriod = 25,
+            .lcdPeriod = 100,
+            .canyonSize = screenSize,
+            .castleConst = {
+                .castleHeight = screenSize * .75,
+                .foundationHitsRequired = 3,
+                .foundationDepth = 21
+            },
+            .satchelConst = {
+                .limitingMethod = AlwaysOne,
+                .satchelDisplayDiameter = 7,
+                .throwPeriod = 10,
+                .maxInFlight = 2,
+                .maxInFlightPeriod = 10,
+                .satchelWeight = 1000,
+            },
+            .platformConst = {
+                .maxPlatformForce = 5000,
+                .platformMass = 100,
+                .platformLength = 16,
+                .maxPlatformBounceSpeed = 5000,
+                .maxPlatformSpeed = 5000
+            },
+            .shieldConst = {
+                .shieldEffectiveRange = 20,
+                .shieldActivationEnergy = 30
+            },
+            .railGunConst = {
+                .railgunAngle = 3*3.1415/4 * 100,
+                .shotMass = 50,
+                .shotRadius = 5
+            },
+            .generatorConst = {
+                .energyCapacity = 50,
+                .maxShotPower = 20
+            }
+        };
+        // Scale the physconsts to the screen size using ratio
+        // Allows for any desired values but immediately scales them to the screen size
+        int ratio = val.canyonSize / screenSize;
+        val.canyonSize = screenSize;
+        val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
+        val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
+        val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
+        val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
+        val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
+        val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
+        val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
+        val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
+        val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
+        return val;
+    } else if (PHYSICS_VERSION == 2) {
+        struct physicsConstants val = { // Suggested Version
+            .physicsPeriod = 50,
+            .sliderPeriod = 150,
+            .lcdPeriod = 100,
+            .canyonSize = 100000,
+            .castleConst = {
+                .castleHeight = 5000,
+                .foundationHitsRequired = 2,
+                .foundationDepth = 5000
+            },
+            .satchelConst = {
+                .limitingMethod = AlwaysOne,
+                .satchelDisplayDiameter = 10,
+                .throwPeriod = 1000,
+                .maxInFlight = 2,
+                .maxInFlightPeriod = 500,
+                .satchelWeight = 1000
+            },
+            .platformConst = {
+                .maxPlatformForce = 20000000,
+                .platformMass = 100,
+                .platformLength = 10000,
+                .maxPlatformBounceSpeed = 50000,
+                .maxPlatformSpeed = 50000
+            },
+            .shieldConst = {
+                .shieldEffectiveRange = 15000,
+                .shieldActivationEnergy = 30000
+            },
+            .railGunConst = {
+                .railgunAngle = 800,
+                .shotMass = 50,
+                .shotRadius = 5
+            },
+            .generatorConst = {
+                .energyCapacity = 50000,
+                .maxShotPower = 20000
+            }
+        };
+        // Scale the physconsts to the screen size using ratio
+        // Allows for any desired values but immediately scales them to the screen size
+        int ratio = val.canyonSize / screenSize;
+        val.canyonSize = screenSize;
+        val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
+        val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
+        val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
+        val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
+        val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
+        val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
+        val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
+        val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
+        val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
+        return val;
+    } else if (PHYSICS_VERSION == 3) { 
+        struct physicsConstants val = { // Normal Version
+            .physicsPeriod = 50,
+            .sliderPeriod = 25,
+            .lcdPeriod = 100,
+            .canyonSize = screenSize,
+            .castleConst = {
+                .castleHeight = screenSize * .75,
+                .foundationHitsRequired = 3,
+                .foundationDepth = 20
+            },
+            .satchelConst = {
+                .limitingMethod = AlwaysOne,
+                .satchelDisplayDiameter = 7,
+                .throwPeriod = 10,
+                .maxInFlight = 2,
+                .maxInFlightPeriod = 10,
+                .satchelWeight = 1000
+            },
+            .platformConst = {
+                .maxPlatformForce = 5000,
+                .platformMass = 100,
+                .platformLength = 16,
+                .maxPlatformBounceSpeed = 5000,
+                .maxPlatformSpeed = 5000
+            },
+            .shieldConst = {
+                .shieldEffectiveRange = 20,
+                .shieldActivationEnergy = 30
+            },
+            .railGunConst = {
+                .railgunAngle = 3*3.1415/4 * 100,
+                .shotMass = 50,
+                .shotRadius = 5
+            },
+            .generatorConst = {
+                .energyCapacity = 50,
+                .maxShotPower = 20
+            },
+        };
+        // Scale the physconsts to the screen size using ratio
+        // Allows for any desired values but immediately scales them to the screen size
+        int ratio = val.canyonSize / screenSize;
+        val.canyonSize = screenSize;
+        val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
+        val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
+        val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
+        val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
+        val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
+        val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
+        val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
+        val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
+        val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
+        return val;
+    }
+}
+
 void  sliderTimerCallback (void  *p_tmr, void  *p_arg);
 /***************************************************************************//**
  * @brief
@@ -301,6 +353,7 @@ void  physicsTaskCreate (void)
  * @brief
  *   The idle task. Enters energy mode 1
  ******************************************************************************/
+OS_MUTEX physicsStructMutex;
 enum objectType {empty, player, satchel, shot};
 struct physicsData {
     int objectType;
@@ -316,20 +369,20 @@ struct physicsData {
 } physDataArray[10];
 enum states {menu, active, win, fail};
 struct gameData {
-    int state = 0; // use states enum
-    int energy = physConsts.generatorConst.energyCapacity;
-    int shotCharge = 0;
-    int foundationDamage = 0;
-    bool evacComplete = false;
-    int satchelsThrown = 0;
-    int shieldsActivated = 0;
-    int usefulShields = 0;
-    int shotsFired = 0;
+    int state; // use states enum
+    int energy;
+    int shotCharge;
+    int foundationDamage;
+    bool evacComplete;
+    int satchelsThrown;
+    int shieldsActivated;
+    int usefulShields;
+    int shotsFired;
 } gameData;
 void spawnSatchel(void);
 void spawnSatchel(void) {
     // Decide random landing spot. Allow for beyond canyon size to give a chance to bounce off of wall
-    int landingSpot = rand() % (physConsts.canyonSize * .2) - (physConsts.canyonSize * .1);
+    int landingSpot = rand() % (int)(physConsts.canyonSize * .2) - (physConsts.canyonSize * .1);
     landingSpot = landingSpot + physDataArray[0].x; // Landing spot is relative to player
     // Calculate random flight duration from 1000ms to 5000ms
     int flightDuration = rand() % 4000 + 1000;
@@ -338,35 +391,36 @@ void spawnSatchel(void) {
     // Calculate Y speed to arrive in flight duration time
     int ySpeed = (-physConsts.castleConst.castleHeight / flightDuration) - (gravity * flightDuration / 2);
     for (int i = 0; i < 10; i++) {
-        if (physicsData[i].objectType == empty) {
-            physicsData[i].objectType = satchel;
-            physicsData[i].x = 0;
-            physicsData[i].y = physConsts.castleConst.castleHeight;
-            physicsData[i].xVel = xSpeed;
-            physicsData[i].yVel = ySpeed;
-            physicsData[i].xAcc = gravity;
-            physicsData[i].yAcc = 0;
-            physicsData[i].xForce = 0;
-            physicsData[i].yForce = 0;
-            physicsData[i].mass = physConsts.satchelConst.mass;
+        if (physDataArray[i].objectType == empty) {
+            physDataArray[i].objectType = satchel;
+            physDataArray[i].x = 0;
+            physDataArray[i].y = physConsts.castleConst.castleHeight;
+            physDataArray[i].xVel = xSpeed;
+            physDataArray[i].yVel = ySpeed;
+            physDataArray[i].xAcc = gravity;
+            physDataArray[i].yAcc = 0;
+            physDataArray[i].xForce = 0;
+            physDataArray[i].yForce = 0;
+            physDataArray[i].mass = physConsts.satchelConst.satchelWeight;
             break;
         }
     }
 }
-void clearPhysicsData(void);
+void clearPhysicsData(int i);
 void clearPhysicsData(int i) {
     // i is the index of the physicsData to clear
-    physicsData[i].objectType = empty;
-    physicsData[i].x = 0;
-    physicsData[i].y = 0;
-    physicsData[i].xVel = 0;
-    physicsData[i].yVel = 0;
-    physicsData[i].xAcc = 0;
-    physicsData[i].yAcc = 0;
-    physicsData[i].xForce = 0;
-    physicsData[i].yForce = 0;
-    physicsData[i].mass = 0;
+    physDataArray[i].objectType = empty;
+    physDataArray[i].x = 0;
+    physDataArray[i].y = 0;
+    physDataArray[i].xVel = 0;
+    physDataArray[i].yVel = 0;
+    physDataArray[i].xAcc = 0;
+    physDataArray[i].yAcc = 0;
+    physDataArray[i].xForce = 0;
+    physDataArray[i].yForce = 0;
+    physDataArray[i].mass = 0;
 }
+
 void  physicsTask (void  *p_arg)
 {
     /* Use argument. */
@@ -374,6 +428,18 @@ void  physicsTask (void  *p_arg)
    RTOS_ERR     err;
     OSTmrStart(&physicsTimer, &err);
     while (err.Code != RTOS_ERR_NONE) {}
+    struct gameData localDat = {
+        .state = menu, // use states enum
+        .energy = physConsts.generatorConst.energyCapacity,
+        .shotCharge = 0,
+        .foundationDamage = 0,
+        .evacComplete = false,
+        .satchelsThrown = 0,
+        .shieldsActivated = 0,
+        .usefulShields = 0,
+        .shotsFired = 0
+    };
+    gameData = localDat;
     for (int i = 0; i < 10; i++) {
         physDataArray[i].objectType = empty;
         physDataArray[i].mass = 0;
@@ -389,9 +455,9 @@ void  physicsTask (void  *p_arg)
     physDataArray[0].objectType = player;
     physDataArray[0].x = physConsts.canyonSize / 2;
     physDataArray[0].y = 0;
-    physDataArray[0].mass = physConsts.platformConst.mass;
+    physDataArray[0].mass = physConsts.platformConst.platformMass;
     bool charging = false;
-
+    int timer = 0;
 
    while (DEF_TRUE) {
         while (gameData.state != active) {} // stop when game not running
@@ -399,29 +465,29 @@ void  physicsTask (void  *p_arg)
        while (err.Code != RTOS_ERR_NONE) {}
         OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        physDataArray[i].xForce = 0;
+        physDataArray[0].xForce = 0;
         if ((sliderState.farLeft || sliderState.left) && (sliderState.farRight || sliderState.right)) {
             // do Nothing
         } else if (sliderState.left == 1) {
-            physDataArray[i].xForce += -physConsts.platformConst.maxPlatformForce / 2;
+            physDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce / 2;
         } else if (sliderState.right == 1) {
-            physDataArray[i].xForce += physConsts.platformConst.maxPlatformForce;
+            physDataArray[0].xForce += physConsts.platformConst.maxPlatformForce;
         } else if (sliderState.farLeft == 1) {
-            physDataArray[i].xForce += -physConsts.platformConst.maxPlatformForce;
+            physDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
         } else if (sliderState.farRight == 1) {
-            physDataArray[i].xForce += physConsts.platformConst.maxPlatformForce / 2;
+            physDataArray[0].xForce += physConsts.platformConst.maxPlatformForce / 2;
         } else {
-            if (physDataArray[i].xVel > 0) {
-                physDataArray[i].xForce += -physConsts.platformConst.maxPlatformForce;
-            } else if (physDataArray[i].xVel < 0) {
-                physDataArray[i].xForce += physConsts.platformConst.maxPlatformForce;
+            if (physDataArray[0].xVel > 0) {
+                physDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
+            } else if (physDataArray[0].xVel < 0) {
+                physDataArray[0].xForce += physConsts.platformConst.maxPlatformForce;
             }
         }
         OSMutexPend(&buttonStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        if (buttonStates.button0 == 1) {
+        if (buttonStates.button0State == 1) {
             charging = true;
-        } else if (buttonStates.button0 == 0 && charging == true) {
+        } else if (buttonStates.button0State == 0 && charging == true) {
             charging = false;
             if (gameData.shotCharge > 0) {
                 for (int j = 0; j < 10; j++) {
@@ -433,9 +499,9 @@ void  physicsTask (void  *p_arg)
                         physDataArray[j].yVel = 0;
                         physDataArray[j].xAcc = 0;
                         physDataArray[j].yAcc = 0;
-                        physDataArray[j].xForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * cos(physConsts.railGunConst.angle * 3.14159 / 180);
-                        physDataArray[j].yForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * sin(physConsts.railGunConst.angle * 3.14159 / 180);
-                        physDataArray[j].mass = physConsts.railGunConst.mass;
+                        physDataArray[j].xForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
+                        physDataArray[j].yForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
+                        physDataArray[j].mass = physConsts.railGunConst.shotMass;
                         physDataArray[0].xForce += physDataArray[j].xForce;
                         gameData.shotCharge = 0;
                         gameData.shotsFired++;
@@ -445,21 +511,21 @@ void  physicsTask (void  *p_arg)
             }
         } 
         
-        if (buttonStates.button1 == 1 && physConsts.shieldConst.shieldActivationEnergy >= physConsts.shieldConst.shieldActivationEnergy && buttonStates.button1Change == 1) {
+        if (buttonStates.button1State == 1 && gameData.energy >= physConsts.shieldConst.shieldActivationEnergy && buttonStates.button1Change == 1) {
             gameData.energy -= physConsts.shieldConst.shieldActivationEnergy;
             gameData.shieldsActivated++;
             for (int i = 0; i < 10; i++) {
-                if (physicsData[i].objectType == shot) {
-                    int xDist = physicsData[i].x - physicsData[0].x;
-                    int yDist = physicsData[i].y - physicsData[0].y;
+                if (physDataArray[i].objectType == shot) {
+                    int xDist = physDataArray[i].x - physDataArray[0].x;
+                    int yDist = physDataArray[i].y - physDataArray[0].y;
                     int distance = sqrt(xDist * xDist + yDist * yDist);
-                    if (distance =< physConsts.shieldConst.shieldEffectiveRange) {
+                    if (distance <= physConsts.shieldConst.shieldEffectiveRange) {
                         clearPhysicsData(i);
                         gameData.usefulShields++;
                     }
                 }
             }
-        } else if (buttonStates.button1 == 1 && gameData.energy < physConsts.shieldConst.shieldActivationEnergy) {
+        } else if (buttonStates.button1State == 1 && gameData.energy < physConsts.shieldConst.shieldActivationEnergy) {
             // Do something to indicate that the player can't use the shield
         }
         OSMutexPost(&buttonStructMutex, OS_OPT_POST_NONE, &err);
@@ -472,105 +538,105 @@ void  physicsTask (void  *p_arg)
         } else if (charging == false && gameData.energy < physConsts.generatorConst.energyCapacity) {
             gameData.energy++;
         }
+
         switch (physConsts.satchelConst.limitingMethod) {
-        case AlwaysOne:
-            // Check if there is a satchel in the array
-            for (int i = 0; i < 10; i++) {
-                if (physicsData[i].objectType == satchel) {
-                    break;
-                } else if (i == 9) {
-                    // If there is no satchel in the array, create one
-                    spawnSatchel();
-                }
-            }
-            break;
-        case MaxInFlight:
-            // Check if # of satchels in flight is less than max
-            int satchelCount = 0;
-            int timer = 0;
-            if (!(timer % physConsts.satchelConst.maxInFlightPeriod == 0)) {
-                timer++;
-            }
-            for (int i = 0; i < 10; i++) {
-                if (physicsData[i].objectType == satchel) {
-                    satchelCount++;
-                }
-            }
-            if (satchelCount < physConsts.satchelConst.maxInFlight && (timer % physConsts.satchelConst.maxInFlightPeriod)) { // If there are less than max, create a satchel
-                spawnSatchel();
-            }
-            break;
-        case PeriodicThrowTime:
-            // Check if it is time to throw a satchel
-            int timer = 0;
-            if (timer % physConsts.satchelConst.throwPeriod == 0) {
-                spawnSatchel();
-            }
-            timer++;
-            break;
-        default:
-            while (1) {}
-            // Shouldn't be here
-            break;
+          case AlwaysOne:
+              // Check if there is a satchel in the array
+              for (int i = 0; i < 10; i++) {
+                  if (physDataArray[i].objectType == satchel) {
+                      break;
+                  } else if (i == 9) {
+                      // If there is no satchel in the array, create one
+                      spawnSatchel();
+                  }
+              }
+              break;
+          case MaxInFlight:
+              // Check if # of satchels in flight is less than max
+              if(0 == 1) {}; // Allow for compilation due to label error
+              int satchelCount = 0;
+              if (!(timer % physConsts.satchelConst.maxInFlightPeriod == 0)) {
+                  timer++;
+              }
+              for (int i = 0; i < 10; i++) {
+                  if (physDataArray[i].objectType == satchel) {
+                      satchelCount++;
+                  }
+              }
+              if (satchelCount < physConsts.satchelConst.maxInFlight && (timer % physConsts.satchelConst.maxInFlightPeriod)) { // If there are less than max, create a satchel
+                  spawnSatchel();
+              }
+              break;
+          case PeriodicThrowTime:
+              // Check if it is time to throw a satchel
+              if(0 == 1) {}; // Allow for compilation due to label error
+              if (timer % physConsts.satchelConst.throwPeriod == 0) {
+                  spawnSatchel();
+              }
+              timer++;
+              break;
+          default:
+              while (1) {}
+              // Shouldn't be here
+              break;
         }   
         for (int i = 0; i < 10; i++) {
-            if (physicsData[i].objectType == shot || physicsData[i].objectType == satchel) {
-                physicsData[i].xAcc = physicsData[i].xForce / physicsData[i].xMass;
-                physicsData[i].yAcc = physicsData[i].yForce / physicsData[i].yMass + gravity;
-                physicsData[i].yVel += physicsData[i].yAcc * (physConsts.physicsPeriod / 1000);
-                physicsData[i].xVel += physicsData[i].xAcc * (physConsts.physicsPeriod / 1000);
-                physicsData[i].x += physicsData[i].xVel * (physConsts.physicsPeriod / 1000);
-                physicsData[i].y += physicsData[i].yVel * (physConsts.physicsPeriod / 1000);
-                physicsData[i].yForce = 0; // Forces aren't constant, so they need to be reset
-                physicsData[i].xForce = 0; // Forces aren't constant, so they need to be reset
+            if (physDataArray[i].objectType == shot || physDataArray[i].objectType == satchel) {
+                physDataArray[i].xAcc = physDataArray[i].xForce / physDataArray[i].mass;
+                physDataArray[i].yAcc = physDataArray[i].yForce / physDataArray[i].mass + gravity;
+                physDataArray[i].yVel += physDataArray[i].yAcc * (physConsts.physicsPeriod / 1000);
+                physDataArray[i].xVel += physDataArray[i].xAcc * (physConsts.physicsPeriod / 1000);
+                physDataArray[i].x += physDataArray[i].xVel * (physConsts.physicsPeriod / 1000);
+                physDataArray[i].y += physDataArray[i].yVel * (physConsts.physicsPeriod / 1000);
+                physDataArray[i].yForce = 0; // Forces aren't constant, so they need to be reset
+                physDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
                 // Check if the shot has hit the ground
-                if (physicsData[i].objectType == satchel) { // Will allow satchel to fly above screen
-                    if (physicsData[i].x > 0 && physicsData[i].x < 100 && physicsData[i].y < 10) { // Lose on hit
+                if (physDataArray[i].objectType == satchel) { // Will allow satchel to fly above screen
+                    if (physDataArray[i].x > 0 && physDataArray[i].x < 100 && physDataArray[i].y < 10) { // Lose on hit
                         clearPhysicsData(i);
                         gameData.state = fail;
-                    } else if ((physicsData[i].y + physConsts.satchelConst.satchelDisplayDiameter / 2) < 0) { // Destroy on ground
+                    } else if ((physDataArray[i].y + physConsts.satchelConst.satchelDisplayDiameter / 2) < 0) { // Destroy on ground
                         clearPhysicsData(i);
-                    } else if ((physicsData[i].x + physConsts.satchelConst.satchelDisplayDiameter / 2) > physConsts.canyonSize){ // bounce off wall if hit
-                        physicsData[i].xVel = -physicsData[i].xVel;
-                        physicsData[i].x = physConsts.canyonSize - physicsData[i].x % physConsts.canyonSize;
+                    } else if ((physDataArray[i].x + physConsts.satchelConst.satchelDisplayDiameter / 2) > physConsts.canyonSize){ // bounce off wall if hit
+                        physDataArray[i].xVel = -physDataArray[i].xVel;
+                        physDataArray[i].x = physConsts.canyonSize - physDataArray[i].x % physConsts.canyonSize;
                     }
-                } else if (physicsData[i].objectType == shot) {
-                    if (physicsData[i].x <= 0  && physicsData[i].y >= physConsts.castleConst.castleHeight && physicsData[i].y <= physConsts.canyonSize) { // Lose on hit
+                } else if (physDataArray[i].objectType == shot) {
+                    if (physDataArray[i].x <= 0  && physDataArray[i].y >= physConsts.castleConst.castleHeight && physDataArray[i].y <= physConsts.canyonSize) { // Lose on hit
                         clearPhysicsData(i);
                         gameData.foundationDamage++;
-                    } else if (physicsData[i].y <= 0) { // Destroy on ground
+                    } else if (physDataArray[i].y <= 0) { // Destroy on ground
                         clearPhysicsData(i);
-                    } else if (physicsData[i].x <= 0  && physicsData[i].y < physConsts.castleConst.castleHeight){ // Destroy of below castle
+                    } else if (physDataArray[i].x <= 0  && physDataArray[i].y < physConsts.castleConst.castleHeight){ // Destroy of below castle
                         clearPhysicsData(i);
                     }
                 }
-            } else if (physicsData[i].objectType = player) {
-                physicsData[i].xAcc = physicsData[i].xForce / physicsData[i].xMass;
-                physicsData[i].xVel += physicsData[i].xAcc * (physConsts.physicsPeriod / 1000);
-                if (physicsData[i].xVel > physConsts.platformConst.maxPlatformSpeed) {
-                    physicsData[i].xVel = physConsts.platformConst.maxPlatformSpeed;
-                } else if (physicsData[i].xVel < -physConsts.platformConst.maxPlatformSpeed) {
-                    physicsData[i].xVel = -physConsts.platformConst.maxPlatformSpeed;
+            } else if (physDataArray[i].objectType == player) {
+                physDataArray[i].xAcc = physDataArray[i].xForce / physDataArray[i].mass;
+                physDataArray[i].xVel += physDataArray[i].xAcc * (physConsts.physicsPeriod / 1000);
+                if (physDataArray[i].xVel > physConsts.platformConst.maxPlatformSpeed) {
+                    physDataArray[i].xVel = physConsts.platformConst.maxPlatformSpeed;
+                } else if (physDataArray[i].xVel < -physConsts.platformConst.maxPlatformSpeed) {
+                    physDataArray[i].xVel = -physConsts.platformConst.maxPlatformSpeed;
                 }
-                physicsData[i].x += physicsData[i].xVel * (physConsts.physicsPeriod / 1000);
-                physicsData[i].xForce = 0; // Forces aren't constant, so they need to be reset
+                physDataArray[i].x += physDataArray[i].xVel * (physConsts.physicsPeriod / 1000);
+                physDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
                 // Check if player hit wall, if so bounce
-                if (physicsData[i].x + physConsts.platformConst.platformLength / 2 < 0) {
-                    physicsData[i].xVel = -physicsData[i].xVel;
-                    physicsData[i].x = physicsData[i].x + 2((physicsData[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
-                } else if (physicsData[i].x + physConsts.platformConst.platformLength / 2 > physConsts.canyonSize) {
-                    physicsData[i].xVel = -physicsData[i].xVel;
-                    physicsData[i].x = physicsData[i].x - 2((physicsData[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
+                if (physDataArray[i].x + physConsts.platformConst.platformLength / 2 < 0) {
+                    physDataArray[i].xVel = -physDataArray[i].xVel;
+                    physDataArray[i].x = physDataArray[i].x + 2*((physDataArray[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
+                } else if (physDataArray[i].x + physConsts.platformConst.platformLength / 2 > physConsts.canyonSize) {
+                    physDataArray[i].xVel = -physDataArray[i].xVel;
+                    physDataArray[i].x = physDataArray[i].x - 2*((physDataArray[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
                 } 
             }
         }
-        OSMutexPost(&physicsMutex, OS_OPT_POST_NONE, &err);
+        OSMutexPost(&physicsStructMutex, OS_OPT_POST_NONE, &err);
         while (err.Code != RTOS_ERR_NONE) {}
    }
    if (err.Code) {}
 }
-OS_TMR LCDTimer;
-OS_SEM LCDSem;
+
 void  LCDTimerCallback (void  *p_tmr, void  *p_arg);
 /***************************************************************************//**
  * @brief
@@ -678,116 +744,99 @@ void  LCDDisplayTask (void  *p_arg)
    struct __GLIB_Rectangle_t platform;
    struct __GLIB_Rectangle_t rectangles[8];
    struct __GLIB_Rectangle_t battery[4];
-   int cannonLength = physConsts.platformConst.platformWidth / 2;
+   int cannonLength = physConsts.platformConst.platformLength / 2;
     while (err.Code != RTOS_ERR_NONE) {}
     while (DEF_TRUE) {
-        OSSemPend(&LCDUpdateSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+        OSSemPend(&LCDSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        if (gameData.gameState == active) {
+        if (gameData.state == active) {
             GLIB_drawRectFilled(&glibContext, &platform);
             // Generate cliff
-            GLIB_drawLineV(&glibContext, 0, 0, gameData.platformY + physConsts.castleConst.castleHeight);
-            GLIB_drawLineV(&glibContext, 1, 0, gameData.platformY + physConsts.castleConst.castleHeight);
+            GLIB_drawLineV(&glibContext, 0, 0, physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth);
+            GLIB_drawLineV(&glibContext, 1, 0, physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth);
             // Generate right wall
             GLIB_drawLineV(&glibContext, screenSize - 1, 0, screenSize - 1);
             // Generate castle
-            rectangles[0] = {
-                // Left wall
-                .xMin = 0,
-                .xMax = physConsts.castleConst.foundationHitsRequired * 2,
-                .yMin = physConsts.castleConst.castleHeight,
-                .yMax = screenSize - 1
-            };
-            rectangles[1] = {
-                // Ceiling
-                .xMin = 0,
-                .xMax = 20,
-                .yMin = screenSize - 6,
-                .yMax = screenSize - 1
-            };
-            rectangles[2] = {
-                // Right wall
-                .xMin = 15,
-                .xMax = 20,
-                .yMin = physConsts.castleConst.castleHeight,
-                .yMax = screenSize - 1
-            };
-            rectangles[3] = {
-                // Floor
-                .xMin = 0,
-                .xMax = 20,
-                .yMin = physConsts.castleConst.castleHeight,
-                .yMax = physConsts.castleConst.castleHeight + 5
-            };
-            rectangles[4] = {
-                // Flag pole
-                .xMin = 20,
-                .xMax = 35,
-                .yMin = screenSize - 3,
-                .yMax = screenSize - 1
-            };
-            rectangles[5] = {
-                // Flag
-                .xMin = 25,
-                .xMax = 35,
-                .yMin = physConsts.castleConst.castleHeight,
-                .yMax = screenSize - 1
-            };
+            // Left wall
+             rectangles[0].xMin = 0;
+             rectangles[0].xMax = physConsts.castleConst.foundationHitsRequired * 2;
+             rectangles[0].yMin = physConsts.castleConst.castleHeight;
+             rectangles[0].yMax = screenSize - 1;
+            // Ceiling
+             rectangles[1].xMin = 0;
+             rectangles[1].xMax = 20;
+             rectangles[1].yMin = screenSize - 6;
+             rectangles[1].yMax = screenSize - 1;
+            // Right wall
+             rectangles[2].xMin = 15;
+             rectangles[2].xMax = 20;
+             rectangles[2].yMin = physConsts.castleConst.castleHeight;
+             rectangles[2].yMax = screenSize - 1;
+            // Floor
+             rectangles[3].xMin = 0;
+             rectangles[3].xMax = 20;
+             rectangles[3].yMin = physConsts.castleConst.castleHeight;
+             rectangles[3].yMax = physConsts.castleConst.castleHeight + 5;
+            // Flag pole
+             rectangles[4].xMin = 20;
+             rectangles[4].xMax = 35;
+             rectangles[4].yMin = screenSize - 3;
+             rectangles[4].yMax = screenSize - 1;
+            // Flag
+             rectangles[5].xMin = 25;
+             rectangles[5].xMax = 35;
+             rectangles[5].yMin = physConsts.castleConst.castleHeight;
+             rectangles[5].yMax = screenSize - 1;
             // Generate Foundation
-            rectangles[6] = {
-                .xMin = 0,
-                .xMax = (physConsts.castleConst.foundationHitsRequired - gameData.foundationDamage) * 2,
-                .yMin = physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth,
-                .yMax = physConsts.castleConst.castleHeight
-            };
+             rectangles[6].xMin = 0;
+             rectangles[6].xMax = (physConsts.castleConst.foundationHitsRequired - gameData.foundationDamage) * 2;
+             rectangles[6].yMin = physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth;
+             rectangles[6].yMax = physConsts.castleConst.castleHeight;
             // Generate platform
-            rectangles[7] = {
-                .xMin = gameData.platformX - physConsts.platformConst.platformLength / 2,
-                .xMax = gameData.platformX + physConsts.platformConst.platformLength / 2,
-                .yMin = gameData.platformY,
-                .yMax = gameData.platformY + 4 
-            };
+              rectangles[7].xMin = physDataArray[0].x - physConsts.platformConst.platformLength / 2;
+              rectangles[7].xMax = physDataArray[0].x + physConsts.platformConst.platformLength / 2;
+              rectangles[7].yMin = 0;
+              rectangles[7].yMax = 4;
             // Draw castle
             for (int i = 0; i < 8; i++) {
                 GLIB_drawRectFilled(&glibContext, &rectangles[i]);
             }
             // Draw Cannon 5 pixels thick
             for (int i = -2; i < 3; i++) {
-                GLIB_drawLine(&glibContext, physicsData[i].x + i, 0, physicsData[i].x + cannonLength * cos(physConsts.railGunConst.angle * 3.14159 / 180) + i, cannonLength * sin(physConsts.railGunConst.angle * 3.14159 / 180));
+                GLIB_drawLine(&glibContext, physDataArray[i].x + i, 0, physDataArray[i].x + cannonLength * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180) + i, cannonLength * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180));
             }
             // Draw Projectiles
             for (int i = 0; i < 10; i++) {
-                if (physicsData[i].objectType == satchel) {
-                    GLIB_drawCircleFilled(&glibContext, physicsData[i].x, physicsData[i].y, physConsts.satchelConst.satchelDisplayDiameter / 2);
-                } else if (physicsData[i].objectType == shot) {
-                    GLIB_drawCircleFilled(&glibContext, physicsData[i].x, physicsData[i].y, physConsts.railGunConst.shotRadius);
+                if (physDataArray[i].objectType == satchel) {
+                    GLIB_drawCircleFilled(&glibContext, physDataArray[i].x, physDataArray[i].y, physConsts.satchelConst.satchelDisplayDiameter / 2);
+                } else if (physDataArray[i].objectType == shot) {
+                    GLIB_drawCircleFilled(&glibContext, physDataArray[i].x, physDataArray[i].y, physConsts.railGunConst.shotRadius);
                 }
             }
             // Draw Battery
-            battery[0] = { // Remaining battery
-                .xMin = screenSize - 17,
-                .xMax = screenSize - 8,
-                .yMin = screenSize - 32,
-                .yMax = screenSize - 32 + (gameData.energy / physConsts.batteryConst.maxEnergy * 20)
-            };
-            battery[1] = { // Outer battery shell
-                .xMin = screenSize - 19,
-                .xMax = screenSize - 6,
-                .yMin = screenSize - 24,
-                .yMax = screenSize - 11
-            };
-            battery[2] = { // Inner battery shell
-                .xMin = screenSize - 18,
-                .xMax = screenSize - 7,
-                .yMin = screenSize - 23,
-                .yMax = screenSize - 12
-            };
-            battery[3] = { // Battery bump
-                .xMin = screenSize - 14,
-                .xMax = screenSize - 11,
-                .yMin = screenSize - 7,
-                .yMax = screenSize - 4
-            };
+            // Remaining battery
+             battery[0].xMin = screenSize - 17;
+             battery[0].xMax = screenSize - 8;
+             battery[0].yMin = screenSize - 32;
+             battery[0].yMax = screenSize - 32 + (gameData.energy / physConsts.generatorConst.energyCapacity * 20);
+            // Outer battery shell
+             battery[1].xMin = screenSize - 19;
+             battery[1].xMax = screenSize - 6;
+             battery[1].yMin = screenSize - 24;
+             battery[1].yMax = screenSize - 11;
+            // Inner battery shell
+             battery[2].xMin = screenSize - 18;
+             battery[2].xMax = screenSize - 7;
+             battery[2].yMin = screenSize - 23;
+             battery[2].yMax = screenSize - 12;
+            // Battery bump
+             battery[3].xMin = screenSize - 14;
+             battery[3].xMax = screenSize - 11;
+             battery[3].yMin = screenSize - 7;
+             battery[3].yMax = screenSize - 4;
+             for (int i = 0; i < 4; i++) {
+                GLIB_drawRectFilled(&glibContext, &battery[i]);
+             }
         }
     }
 }
@@ -799,15 +848,13 @@ void LED0TimerCallback (void  *p_tmr, void  *p_arg);
  *    when the timer expires. Used to wait ~3 during held slider before turning
  *   on the LED1;
  ******************************************************************************/
-OS_TMR LED0Timer;
-int counter = 0;
 void LED0TimerCallback (void  *p_tmr, void  *p_arg)
 {
     (void)&p_arg;
     (void)&p_tmr;
     RTOS_ERR err;
+    static int counter;
     counter++;
-    if
 
 
 }
@@ -819,9 +866,6 @@ void LED1TimerCallback (void  *p_tmr, void  *p_arg);
  *    when the timer expires. Used to wait ~3 during held slider before turning
  *   on the LED1;
  ******************************************************************************/
-bool state = false;
-OS_TMR LED1Timer;
-int counter = 0;
 int startBelow50 = 0;
 int evacTime = 5; // seconds
 void LED1TimerCallback (void  *p_tmr, void  *p_arg)
@@ -829,13 +873,15 @@ void LED1TimerCallback (void  *p_tmr, void  *p_arg)
     (void)&p_arg;
     (void)&p_tmr;
     RTOS_ERR err;
+    static int counter;
     counter++;
+
     if (gameData.foundationDamage >= physConsts.castleConst.foundationHitsRequired * .5) {
         if (startBelow50 == 0) {
             startBelow50 = counter;
         }
         if (counter - startBelow50 > evacTime * 2) {
-            gameData.evavComplete = true;
+            gameData.evacComplete = true;
             GPIO_PinOutSet(LED1_port, LED1_pin);
         } else if (counter - startBelow50 > evacTime) {
             if (counter % 2 == 0) {
@@ -858,16 +904,7 @@ void LED1TimerCallback (void  *p_tmr, void  *p_arg)
  * @param state
  * True if the button was pressed, false if it was released.
  ******************************************************************************/
-struct buttonStateStruct {
-  bool button0State;
-  bool button1State;
-  bool button0Change; 
-  bool button1Change;
-};
 
-OS_MUTEX buttonStructMutex;
-OS_SEM buttonSem;
-struct buttonStateStruct buttonStates;
 void GPIO_INTERRUPT_Handler() {
   RTOS_ERR err;
   OSSemPost(&buttonSem, OS_OPT_POST_ALL, &err);
@@ -956,14 +993,6 @@ void  buttonTask (void  *p_arg)
    if (err.Code) {}
 }
 
-struct sliderState {
-  bool farLeft;
-  bool left;
-  bool right;
-  bool farRight;
-};
-struct sliderState sliderState;
-OS_MUTEX sliderMutex;
 #define  SLIDER_PRIO            20u  /*   Task Priority.                 */
 #define  SLIDER_STK_SIZE       256u  /*   Stack size in CPU_STK.         */
 OS_TCB   sliderTaskTCB;                            /*   Task Control Block.   */
@@ -1124,20 +1153,22 @@ void app_init(void)
   LCD_init();
 
   // Initialize Physical constants
-  physConsts = initPhysics();
+  physConsts = physicsConstantsInit();
 
   // Mutex Creation
   OSMutexCreate(&buttonStructMutex, "button mutex", &err);
   while (err.Code != RTOS_ERR_NONE) {}
-  OSMutexCreate(&sliderMutex, "Slider Muted", &err);
+  OSMutexCreate(&sliderMutex, "Slider Mutex", &err);
+  while (err.Code != RTOS_ERR_NONE) {}
+  OSMutexCreate(&physicsStructMutex, "Physics Mutex", &err);
   while (err.Code != RTOS_ERR_NONE) {}
 
   // Timer Creation
-  OSTmrCreate(&physicsTimer, "Physics Timer", 0, PHYSICS_PERIOD, OS_OPT_TMR_PERIODIC, &physicsTimerCallback, DEF_NULL, &err);
+  OSTmrCreate(&physicsTimer, "Physics Timer", 0, physConsts.physicsPeriod, OS_OPT_TMR_PERIODIC, &physicsTimerCallback, DEF_NULL, &err);
   while (err.Code != RTOS_ERR_NONE) {}
-  OSTmrCreate(&LCDTimer, "LCD Timer", 0, LCD_PERIOD, OS_OPT_TMR_PERIODIC, &LCDTimerCallback, DEF_NULL, &err);
+  OSTmrCreate(&LCDTimer, "LCD Timer", 0, physConsts.lcdPeriod, OS_OPT_TMR_PERIODIC, &LCDTimerCallback, DEF_NULL, &err);
   while (err.Code != RTOS_ERR_NONE) {}
-  OSTmrCreate(&sliderTimer, "Slider Timer", 0, SLIDER_PERIOD, OS_OPT_TMR_PERIODIC, &sliderTimerCallback, DEF_NULL, &err);
+  OSTmrCreate(&sliderTimer, "Slider Timer", 0, physConsts.sliderPeriod, OS_OPT_TMR_PERIODIC, &sliderTimerCallback, DEF_NULL, &err);
   while (err.Code != RTOS_ERR_NONE) {}
   OSTmrCreate(&LED0Timer, "LED0 Timer", 0, LED0_PERIOD, OS_OPT_TMR_PERIODIC, &LED0TimerCallback, DEF_NULL, &err);
   while (err.Code != RTOS_ERR_NONE) {}
