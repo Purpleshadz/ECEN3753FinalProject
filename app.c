@@ -343,8 +343,8 @@ struct gameData {
     int usefulShields;
     int shotsFired;
 } gameData;
-void spawnSatchel(void);
-void spawnSatchel(void) {
+void spawnSatchel(struct physicsData *satchel);
+void spawnSatchel(struct physicsData *satchel) {
     // Decide random landing spot. Allow for beyond canyon size to give a chance to bounce off of wall
     int landingSpot = rand() % (int)(physConsts.canyonSize * .2) - (physConsts.canyonSize * .1);
     landingSpot = landingSpot + physDataArray[0].x; // Landing spot is relative to player
@@ -354,35 +354,31 @@ void spawnSatchel(void) {
     int xSpeed = landingSpot / flightDuration;
     // Calculate Y speed to arrive in flight duration time
     int ySpeed = (-physConsts.castleConst.castleHeight / flightDuration) - (gravity * flightDuration / 2);
-    for (int i = 0; i < 10; i++) {
-        if (physDataArray[i].objectType == empty) {
-            physDataArray[i].objectType = satchel;
-            physDataArray[i].x = 0;
-            physDataArray[i].y = physConsts.castleConst.castleHeight;
-            physDataArray[i].xVel = xSpeed;
-            physDataArray[i].yVel = ySpeed;
-            physDataArray[i].xAcc = gravity;
-            physDataArray[i].yAcc = 0;
-            physDataArray[i].xForce = 0;
-            physDataArray[i].yForce = 0;
-            physDataArray[i].mass = physConsts.satchelConst.satchelWeight;
-            break;
-        }
-    }
+
+    satchel->objectType = satchel;
+    satchel->x = 0;
+    satchel->y = physConsts.castleConst.castleHeight;
+    satchel->xVel = xSpeed;
+    satchel->yVel = ySpeed;
+    satchel->xAcc = gravity;
+    satchel->yAcc = 0;
+    satchel->xForce = 0;
+    satchel->yForce = 0;
+    satchel->mass = physConsts.satchelConst.satchelWeight;
+    break;
 }
-void clearPhysicsData(int i);
-void clearPhysicsData(int i) {
-    // i is the index of the physicsData to clear
-    physDataArray[i].objectType = empty;
-    physDataArray[i].x = 0;
-    physDataArray[i].y = 0;
-    physDataArray[i].xVel = 0;
-    physDataArray[i].yVel = 0;
-    physDataArray[i].xAcc = 0;
-    physDataArray[i].yAcc = 0;
-    physDataArray[i].xForce = 0;
-    physDataArray[i].yForce = 0;
-    physDataArray[i].mass = 0;
+void clearPhysicsData(struct physicsData *physData);
+void clearPhysicsData(struct physicsData *physData) {
+    physData.objectType = empty;
+    physData.x = 0;
+    physData.y = 0;
+    physData.xVel = 0;
+    physData.yVel = 0;
+    physData.xAcc = 0;
+    physData.yAcc = 0;
+    physData.xForce = 0;
+    physData.yForce = 0;
+    physData.mass = 0;
 }
 
 void  physicsTask (void  *p_arg)
@@ -421,9 +417,10 @@ void  physicsTask (void  *p_arg)
     bool charging = false;
     int timer = 0;
     gameData.state = active;
+    struct physicsData localDataArray[10]; // Local copy of physics data to minimize mutex time
 
    while (DEF_TRUE) {
-        while (gameData.state != active) {// stop when game not running
+        while (gameData.state != active) {// stop when game not running. Used to block task
             OSSemPend(&gameEndSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
             while (err.Code != RTOS_ERR_NONE) {}
         }
@@ -431,22 +428,28 @@ void  physicsTask (void  *p_arg)
        while (err.Code != RTOS_ERR_NONE) {}
         OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        physDataArray[0].xForce = 0;
+        // Copy physics data to local array
+        for (int i = 0; i < 10; i++) {
+            localDataArray[i] = physDataArray[i];
+        }
+        OSMutexPost(&physicsStructMutex, OS_OPT_POST_NONE, &err);
+        localDataArray[0].xForce = 0;
+        OSMutexPend(&sliderMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         if ((sliderState.farLeft || sliderState.left) && (sliderState.farRight || sliderState.right)) {
             // do Nothing
         } else if (sliderState.left == 1) {
-            physDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce / 2;
+            localDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce / 2;
         } else if (sliderState.right == 1) {
-            physDataArray[0].xForce += physConsts.platformConst.maxPlatformForce;
+            localDataArray[0].xForce += physConsts.platformConst.maxPlatformForce;
         } else if (sliderState.farLeft == 1) {
-            physDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
+            localDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
         } else if (sliderState.farRight == 1) {
-            physDataArray[0].xForce += physConsts.platformConst.maxPlatformForce / 2;
+            localDataArray[0].xForce += physConsts.platformConst.maxPlatformForce / 2;
         } else {
-            if (physDataArray[0].xVel > 0) {
-                physDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
-            } else if (physDataArray[0].xVel < 0) {
-                physDataArray[0].xForce += physConsts.platformConst.maxPlatformForce;
+            if (localDataArray[0].xVel > 0) {
+                localDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
+            } else if (localDataArray[0].xVel < 0) {
+                localDataArray[0].xForce += physConsts.platformConst.maxPlatformForce;
             }
         }
         OSMutexPend(&buttonStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
@@ -457,18 +460,18 @@ void  physicsTask (void  *p_arg)
             charging = false;
             if (gameData.shotCharge > 0) {
                 for (int j = 0; j < 10; j++) {
-                    if (physDataArray[j].objectType == empty) {
-                        physDataArray[j].objectType = shot;
-                        physDataArray[j].x = physDataArray[0].x;
-                        physDataArray[j].y = physDataArray[0].y;
-                        physDataArray[j].xVel = 0;
-                        physDataArray[j].yVel = 0;
-                        physDataArray[j].xAcc = 0;
-                        physDataArray[j].yAcc = 0;
-                        physDataArray[j].xForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
-                        physDataArray[j].yForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
-                        physDataArray[j].mass = physConsts.railGunConst.shotMass;
-                        physDataArray[0].xForce += physDataArray[j].xForce;
+                    if (localDataArray[j].objectType == empty) {
+                        localDataArray[j].objectType = shot;
+                        localDataArray[j].x = localDataArray[0].x;
+                        localDataArray[j].y = localDataArray[0].y;
+                        localDataArray[j].xVel = 0;
+                        localDataArray[j].yVel = 0;
+                        localDataArray[j].xAcc = 0;
+                        localDataArray[j].yAcc = 0;
+                        localDataArray[j].xForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
+                        localDataArray[j].yForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
+                        localDataArray[j].mass = physConsts.railGunConst.shotMass;
+                        localDataArray[0].xForce += localDataArray[j].xForce;
                         gameData.shotCharge = 0;
                         gameData.shotsFired++;
                         break;
@@ -481,12 +484,12 @@ void  physicsTask (void  *p_arg)
             gameData.energy -= physConsts.shieldConst.shieldActivationEnergy;
             gameData.shieldsActivated++;
             for (int i = 0; i < 10; i++) {
-                if (physDataArray[i].objectType == shot) {
-                    int xDist = physDataArray[i].x - physDataArray[0].x;
-                    int yDist = physDataArray[i].y - physDataArray[0].y;
+                if (localDataArray[i].objectType == shot) {
+                    int xDist = localDataArray[i].x - localDataArray[0].x;
+                    int yDist = localDataArray[i].y - localDataArray[0].y;
                     int distance = sqrt(xDist * xDist + yDist * yDist);
                     if (distance <= physConsts.shieldConst.shieldEffectiveRange) {
-                        clearPhysicsData(i);
+                        clearPhysicsData(&localDataArray[i]);
                         gameData.usefulShields++;
                     }
                 }
@@ -509,11 +512,15 @@ void  physicsTask (void  *p_arg)
           case AlwaysOne:
               // Check if there is a satchel in the array
               for (int i = 0; i < 10; i++) {
-                  if (physDataArray[i].objectType == satchel) {
+                  if (localDataArray[i].objectType == satchel) {
                       break;
                   } else if (i == 9) {
                       // If there is no satchel in the array, create one
-                      spawnSatchel();
+                      for (int i = 0; i < 10; i++) {
+                        if (localDataArray[i].objectType == empty) {
+                            spawnSatchel(&localDataArray[i]);
+                        }
+                      }
                   }
               }
               break;
@@ -525,19 +532,27 @@ void  physicsTask (void  *p_arg)
                   timer++;
               }
               for (int i = 0; i < 10; i++) {
-                  if (physDataArray[i].objectType == satchel) {
+                  if (localDataArray[i].objectType == satchel) {
                       satchelCount++;
                   }
               }
               if (satchelCount < physConsts.satchelConst.maxInFlight && (timer % physConsts.satchelConst.maxInFlightPeriod)) { // If there are less than max, create a satchel
-                  spawnSatchel();
+                    for (int i = 0; i < 10; i++) {
+                        if (localDataArray[i].objectType == empty) {
+                            spawnSatchel(&localDataArray[i]);
+                        }
+                    }
               }
               break;
           case PeriodicThrowTime:
               // Check if it is time to throw a satchel
               if(0 == 1) {}; // Allow for compilation due to label error
               if (timer % physConsts.satchelConst.throwPeriod == 0) {
-                  spawnSatchel();
+                    for (int i = 0; i < 10; i++) {
+                        if (localDataArray[i].objectType == empty) {
+                            spawnSatchel(&localDataArray[i]);
+                        }
+                    }
               }
               timer++;
               break;
@@ -547,55 +562,60 @@ void  physicsTask (void  *p_arg)
               break;
         }   
         for (int i = 0; i < 10; i++) {
-            if (physDataArray[i].objectType == shot || physDataArray[i].objectType == satchel) {
-                physDataArray[i].xAcc = physDataArray[i].xForce / physDataArray[i].mass;
-                physDataArray[i].yAcc = physDataArray[i].yForce / physDataArray[i].mass + gravity;
-                physDataArray[i].yVel += physDataArray[i].yAcc * (physConsts.physicsPeriod / 1000);
-                physDataArray[i].xVel += physDataArray[i].xAcc * (physConsts.physicsPeriod / 1000);
-                physDataArray[i].x += physDataArray[i].xVel * (physConsts.physicsPeriod / 1000);
-                physDataArray[i].y += physDataArray[i].yVel * (physConsts.physicsPeriod / 1000);
-                physDataArray[i].yForce = 0; // Forces aren't constant, so they need to be reset
-                physDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
+            if (localDataArray[i].objectType == shot || localDataArray[i].objectType == satchel) {
+                localDataArray[i].xAcc = localDataArray[i].xForce / localDataArray[i].mass;
+                localDataArray[i].yAcc = localDataArray[i].yForce / localDataArray[i].mass + gravity;
+                localDataArray[i].yVel += localDataArray[i].yAcc * (physConsts.physicsPeriod / 1000);
+                localDataArray[i].xVel += localDataArray[i].xAcc * (physConsts.physicsPeriod / 1000);
+                localDataArray[i].x += localDataArray[i].xVel * (physConsts.physicsPeriod / 1000);
+                localDataArray[i].y += localDataArray[i].yVel * (physConsts.physicsPeriod / 1000);
+                localDataArray[i].yForce = 0; // Forces aren't constant, so they need to be reset
+                localDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
                 // Check if the shot has hit the ground
-                if (physDataArray[i].objectType == satchel) { // Will allow satchel to fly above screen
-                    if (physDataArray[i].x > 0 && physDataArray[i].x < 100 && physDataArray[i].y < 10) { // Lose on hit
+                if (localDataArray[i].objectType == satchel) { // Will allow satchel to fly above screen
+                    if (localDataArray[i].x > 0 && localDataArray[i].x < 100 && localDataArray[i].y < 10) { // Lose on hit
                         clearPhysicsData(i);
                         gameData.state = fail;
-                    } else if ((physDataArray[i].y + physConsts.satchelConst.satchelDisplayDiameter / 2) < 0) { // Destroy on ground
+                    } else if ((localDataArray[i].y + physConsts.satchelConst.satchelDisplayDiameter / 2) < 0) { // Destroy on ground
                         clearPhysicsData(i);
-                    } else if ((physDataArray[i].x + physConsts.satchelConst.satchelDisplayDiameter / 2) > physConsts.canyonSize){ // bounce off wall if hit
-                        physDataArray[i].xVel = -physDataArray[i].xVel;
-                        physDataArray[i].x = physConsts.canyonSize - physDataArray[i].x % physConsts.canyonSize;
+                    } else if ((localDataArray[i].x + physConsts.satchelConst.satchelDisplayDiameter / 2) > physConsts.canyonSize){ // bounce off wall if hit
+                        localDataArray[i].xVel = -localDataArray[i].xVel;
+                        localDataArray[i].x = physConsts.canyonSize - localDataArray[i].x % physConsts.canyonSize;
                     }
-                } else if (physDataArray[i].objectType == shot) {
-                    if (physDataArray[i].x <= 0  && physDataArray[i].y >= physConsts.castleConst.castleHeight && physDataArray[i].y <= physConsts.canyonSize) { // Lose on hit
+                } else if (localDataArray[i].objectType == shot) {
+                    if (localDataArray[i].x <= 0  && localDataArray[i].y >= physConsts.castleConst.castleHeight && physDataArray[i].y <= physConsts.canyonSize) { // Lose on hit
                         clearPhysicsData(i);
                         gameData.foundationDamage++;
-                    } else if (physDataArray[i].y <= 0) { // Destroy on ground
+                    } else if (localDataArray[i].y <= 0) { // Destroy on ground
                         clearPhysicsData(i);
-                    } else if (physDataArray[i].x <= 0  && physDataArray[i].y < physConsts.castleConst.castleHeight){ // Destroy of below castle
+                    } else if (localDataArray[i].x <= 0  && localDataArray[i].y < physConsts.castleConst.castleHeight){ // Destroy of below castle
                         clearPhysicsData(i);
                     }
                 }
-            } else if (physDataArray[i].objectType == player) {
-                physDataArray[i].xAcc = physDataArray[i].xForce / physDataArray[i].mass;
-                physDataArray[i].xVel += physDataArray[i].xAcc * (physConsts.physicsPeriod / 1000);
-                if (physDataArray[i].xVel > physConsts.platformConst.maxPlatformSpeed) {
-                    physDataArray[i].xVel = physConsts.platformConst.maxPlatformSpeed;
-                } else if (physDataArray[i].xVel < -physConsts.platformConst.maxPlatformSpeed) {
-                    physDataArray[i].xVel = -physConsts.platformConst.maxPlatformSpeed;
+            } else if (localDataArray[i].objectType == player) {
+                localDataArray[i].xAcc = localDataArray[i].xForce / localDataArray[i].mass;
+                localDataArray[i].xVel += localDataArray[i].xAcc * (physConsts.physicsPeriod / 1000);
+                if (localDataArray[i].xVel > physConsts.platformConst.maxPlatformSpeed) {
+                    localDataArray[i].xVel = physConsts.platformConst.maxPlatformSpeed;
+                } else if (localDataArray[i].xVel < -physConsts.platformConst.maxPlatformSpeed) {
+                    localDataArray[i].xVel = -physConsts.platformConst.maxPlatformSpeed;
                 }
-                physDataArray[i].x += physDataArray[i].xVel * (physConsts.physicsPeriod / 1000);
-                physDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
+                localDataArray[i].x += localDataArray[i].xVel * (physConsts.physicsPeriod / 1000);
+                localDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
                 // Check if player hit wall, if so bounce
-                if (physDataArray[i].x + physConsts.platformConst.platformLength / 2 < 0) {
-                    physDataArray[i].xVel = -physDataArray[i].xVel;
-                    physDataArray[i].x = physDataArray[i].x + 2*((physDataArray[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
-                } else if (physDataArray[i].x + physConsts.platformConst.platformLength / 2 > physConsts.canyonSize) {
-                    physDataArray[i].xVel = -physDataArray[i].xVel;
-                    physDataArray[i].x = physDataArray[i].x - 2*((physDataArray[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
+                if (localDataArray[i].x + physConsts.platformConst.platformLength / 2 < 0) {
+                    localDataArray[i].xVel = -localDataArray[i].xVel;
+                    localDataArray[i].x = localDataArray[i].x + 2*((localDataArray[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
+                } else if (localDataArray[i].x + physConsts.platformConst.platformLength / 2 > physConsts.canyonSize) {
+                    localDataArray[i].xVel = -localDataArray[i].xVel;
+                    localDataArray[i].x = localDataArray[i].x - 2*((localDataArray[i].x + physConsts.platformConst.platformLength) % physConsts.canyonSize);
                 } 
             }
+        }
+        OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+        while (err.Code != RTOS_ERR_NONE) {}
+        for (int i = 0; i < 10; i++) {
+            physicsDataArray[i] = localDataArray[i];
         }
         OSMutexPost(&physicsStructMutex, OS_OPT_POST_NONE, &err);
         while (err.Code != RTOS_ERR_NONE) {}
