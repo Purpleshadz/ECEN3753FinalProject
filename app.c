@@ -34,10 +34,8 @@
 #include "stdio.h"
 #include "FIFO.h"
 
-// #define TEST_MODE // Comment out to disable test mode
+//#define TEST_MODE // Comment out to disable test mode
 
-#define LED0_PERIOD 50
-#define LED1_PERIOD 500
 #define PHYSICS_VERSION 1
 
 struct castleConstants {
@@ -99,11 +97,11 @@ struct sliderState {
 };
 struct sliderState sliderState;
 OS_MUTEX sliderMutex;
-OS_TMR sliderTimer;
 OS_SEM sliderSem;
 
-OS_TMR LCDTimer;
 OS_SEM LCDSem;
+
+OS_SEM gameEndSem; // Used to block tasks when the game is over. Will only post if intending to restart.
 
 struct buttonStateStruct {
   bool button0State;
@@ -112,20 +110,17 @@ struct buttonStateStruct {
   bool button1Change;
 };
 
-OS_TMR LED0Timer;
-OS_TMR LED1Timer;
-
 // Variables to allow for easy tuning of game
 int gravity = -10;
-int screenSize = 128;
+int screenSize = 127; // Actually 128 but 0 indexed
 struct physicsConstants physicsConstantsInit(void);
 struct physicsConstants physicsConstantsInit(void) {
     // struct physicsConstants val;
     if (PHYSICS_VERSION == 1) {
         struct physicsConstants val = { // Normal Version
             .physicsPeriod = 50,
-            .sliderPeriod = 25,
-            .lcdPeriod = 100,
+            .sliderPeriod = 100,
+            .lcdPeriod = 150,
             .canyonSize = screenSize,
             .castleConst = {
                 .castleHeight = screenSize * .75,
@@ -165,21 +160,21 @@ struct physicsConstants physicsConstantsInit(void) {
         // Allows for any desired values but immediately scales them to the screen size
         int ratio = val.canyonSize / screenSize;
         val.canyonSize = screenSize;
-        val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
-        val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
-        val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
-        val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
-        val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
-        val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
-        val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
-        val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
-        val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
+        val.castleConst.castleHeight = val.castleConst.castleHeight / ratio;
+        val.castleConst.foundationDepth = val.castleConst.foundationDepth / ratio;
+        val.satchelConst.satchelDisplayDiameter = val.satchelConst.satchelDisplayDiameter / ratio;
+        val.platformConst.platformLength = val.platformConst.platformLength / ratio;
+        val.platformConst.maxPlatformForce = val.platformConst.maxPlatformForce / ratio; // maybe
+        val.platformConst.maxPlatformBounceSpeed = val.platformConst.maxPlatformBounceSpeed / ratio;
+        val.platformConst.maxPlatformSpeed = val.platformConst.maxPlatformSpeed / ratio;
+        val.shieldConst.shieldEffectiveRange = val.shieldConst.shieldEffectiveRange / ratio;
+        val.railGunConst.shotRadius = val.railGunConst.shotRadius / ratio;
         return val;
     } else if (PHYSICS_VERSION == 2) {
         struct physicsConstants val = { // Suggested Version
             .physicsPeriod = 50,
-            .sliderPeriod = 150,
-            .lcdPeriod = 100,
+            .sliderPeriod = 100,
+            .lcdPeriod = 150,
             .canyonSize = 100000,
             .castleConst = {
                 .castleHeight = 5000,
@@ -219,21 +214,21 @@ struct physicsConstants physicsConstantsInit(void) {
         // Allows for any desired values but immediately scales them to the screen size
         int ratio = val.canyonSize / screenSize;
         val.canyonSize = screenSize;
-        val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
-        val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
-        val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
-        val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
-        val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
-        val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
-        val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
-        val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
-        val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
+        val.castleConst.castleHeight = val.castleConst.castleHeight / ratio;
+        val.castleConst.foundationDepth = val.castleConst.foundationDepth / ratio;
+        val.satchelConst.satchelDisplayDiameter = val.satchelConst.satchelDisplayDiameter / ratio;
+        val.platformConst.platformLength = val.platformConst.platformLength / ratio;
+        val.platformConst.maxPlatformForce = val.platformConst.maxPlatformForce / ratio; // maybe
+        val.platformConst.maxPlatformBounceSpeed = val.platformConst.maxPlatformBounceSpeed / ratio;
+        val.platformConst.maxPlatformSpeed = val.platformConst.maxPlatformSpeed / ratio;
+        val.shieldConst.shieldEffectiveRange = val.shieldConst.shieldEffectiveRange / ratio;
+        val.railGunConst.shotRadius = val.railGunConst.shotRadius / ratio;
         return val;
     } else if (PHYSICS_VERSION == 3) { 
         struct physicsConstants val = { // Normal Version
             .physicsPeriod = 50,
-            .sliderPeriod = 25,
-            .lcdPeriod = 100,
+            .sliderPeriod = 100,
+            .lcdPeriod = 150,
             .canyonSize = screenSize,
             .castleConst = {
                 .castleHeight = screenSize * .75,
@@ -273,52 +268,21 @@ struct physicsConstants physicsConstantsInit(void) {
         // Allows for any desired values but immediately scales them to the screen size
         int ratio = val.canyonSize / screenSize;
         val.canyonSize = screenSize;
-        val.castleConst.castleHeight = physConsts.castleConst.castleHeight / ratio;
-        val.castleConst.foundationDepth = physConsts.castleConst.foundationDepth / ratio;
-        val.satchelConst.satchelDisplayDiameter = physConsts.satchelConst.satchelDisplayDiameter / ratio;
-        val.platformConst.platformLength = physConsts.platformConst.platformLength / ratio;
-        val.platformConst.maxPlatformForce = physConsts.platformConst.maxPlatformForce / ratio; // maybe
-        val.platformConst.maxPlatformBounceSpeed = physConsts.platformConst.maxPlatformBounceSpeed / ratio;
-        val.platformConst.maxPlatformSpeed = physConsts.platformConst.maxPlatformSpeed / ratio;
-        val.shieldConst.shieldEffectiveRange = physConsts.shieldConst.shieldEffectiveRange / ratio;
-        val.railGunConst.shotRadius = physConsts.railGunConst.shotRadius / ratio;
+        val.castleConst.castleHeight = val.castleConst.castleHeight / ratio;
+        val.castleConst.foundationDepth = val.castleConst.foundationDepth / ratio;
+        val.satchelConst.satchelDisplayDiameter = val.satchelConst.satchelDisplayDiameter / ratio;
+        val.platformConst.platformLength = val.platformConst.platformLength / ratio;
+        val.platformConst.maxPlatformForce = val.platformConst.maxPlatformForce / ratio; // maybe
+        val.platformConst.maxPlatformBounceSpeed = val.platformConst.maxPlatformBounceSpeed / ratio;
+        val.platformConst.maxPlatformSpeed = val.platformConst.maxPlatformSpeed / ratio;
+        val.shieldConst.shieldEffectiveRange = val.shieldConst.shieldEffectiveRange / ratio;
+        val.railGunConst.shotRadius = val.railGunConst.shotRadius / ratio;
         return val;
     }
 }
 
-void  sliderTimerCallback (void  *p_tmr, void  *p_arg);
-/***************************************************************************//**
- * @brief
- *   timer callback function. Posts a flag to the LED task to turn on the LED
- *    when the timer expires. Used to wait ~3 during held slider before turning
- *   on the LED1;
- ******************************************************************************/
-void  sliderTimerCallback (void  *p_tmr, void  *p_arg)
-{
-    (void)&p_arg;
-    (void)&p_tmr;
-    RTOS_ERR err;
-    OSSemPost(&sliderSem, OS_OPT_POST_ALL, &err);
-    while (err.Code != RTOS_ERR_NONE) {}
-}
 
-OS_TMR physicsTimer;
 OS_SEM physicsSem;
-void  physicsTimerCallback (void  *p_tmr, void  *p_arg);
-/***************************************************************************//**
- * @brief
- *   timer callback function. Posts a flag to the LED task to turn on the LED
- *    when the timer expires. Used to wait ~3 during held slider before turning
- *   on the LED1;
- ******************************************************************************/
-void  physicsTimerCallback (void  *p_tmr, void  *p_arg)
-{
-    (void)&p_arg;
-    (void)&p_tmr;
-    RTOS_ERR err;
-    OSSemPost(&physicsSem, OS_OPT_POST_ALL, &err);
-    while (err.Code != RTOS_ERR_NONE) {}
-}
 #define  PHYSICS_TASK_PRIO            21u  /*   Task Priority.                 */
 #define  PHYSICS_TASK_STK_SIZE       256u  /*   Stack size in CPU_STK.         */
 OS_TCB   physicsTaskTCB;                            /*   Task Control Block.   */
@@ -426,8 +390,6 @@ void  physicsTask (void  *p_arg)
     /* Use argument. */
    (void)&p_arg;
    RTOS_ERR     err;
-    OSTmrStart(&physicsTimer, &err);
-    while (err.Code != RTOS_ERR_NONE) {}
     struct gameData localDat = {
         .state = menu, // use states enum
         .energy = physConsts.generatorConst.energyCapacity,
@@ -458,10 +420,14 @@ void  physicsTask (void  *p_arg)
     physDataArray[0].mass = physConsts.platformConst.platformMass;
     bool charging = false;
     int timer = 0;
+    gameData.state = active;
 
    while (DEF_TRUE) {
-        while (gameData.state != active) {} // stop when game not running
-       OSSemPend(&physicsSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+        while (gameData.state != active) {// stop when game not running
+            OSSemPend(&gameEndSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+            while (err.Code != RTOS_ERR_NONE) {}
+        }
+        OSTimeDlyHMSM(0, 0, 0, physConsts.physicsPeriod, OS_OPT_TIME_DLY, &err);
        while (err.Code != RTOS_ERR_NONE) {}
         OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
@@ -637,21 +603,6 @@ void  physicsTask (void  *p_arg)
    if (err.Code) {}
 }
 
-void  LCDTimerCallback (void  *p_tmr, void  *p_arg);
-/***************************************************************************//**
- * @brief
- *   timer callback function. Posts a flag to the LED task to turn on the LED
- *    when the timer expires. Used to wait ~3 during held slider before turning
- *   on the LED1;
- ******************************************************************************/
-void  LCDTimerCallback (void  *p_tmr, void  *p_arg)
-{
-    (void)&p_arg;
-    (void)&p_tmr;
-    RTOS_ERR err;
-    OSSemPost(&LCDSem, OS_OPT_POST_ALL, &err);
-}
-
 static GLIB_Context_t glibContext;
 
 static void LCD_init()
@@ -678,24 +629,6 @@ static void LCD_init()
   /* Use Normal font */
   GLIB_setFont(&glibContext, (GLIB_Font_t *) &GLIB_FontNormal8x8);
 
-  /* Draw text on the memory lcd display*/
-  GLIB_drawStringOnLine(&glibContext,
-                        "Welcome to...\n**Lab 7**!",
-                        0,
-                        GLIB_ALIGN_LEFT,
-                        5,
-                        5,
-                        true);
-
-  /* Draw text on the memory lcd display*/
-  GLIB_drawStringOnLine(&glibContext,
-                        "Review the lab\ninstructions!",
-                        2,
-                        GLIB_ALIGN_LEFT,
-                        5,
-                        5,
-                        true);
-  /* Post updates to display */
   DMD_updateDisplay();
 }
 
@@ -738,72 +671,70 @@ void  LCDDisplayTask (void  *p_arg)
     /* Use argument. */
    (void)&p_arg;
    RTOS_ERR     err;
-   OSTmrStart(&LED1Timer, &err);
-   OSTmrStart(&LED0Timer, &err);
-   OSTmrStart(&LCDTimer, &err);
+   struct __GLIB_Rectangle_t rectangles[7];
+   struct __GLIB_Rectangle_t battery[6];
    struct __GLIB_Rectangle_t platform;
-   struct __GLIB_Rectangle_t rectangles[8];
-   struct __GLIB_Rectangle_t battery[4];
-   int cannonLength = physConsts.platformConst.platformLength / 2;
-    while (err.Code != RTOS_ERR_NONE) {}
+   int cannonLength = physConsts.platformConst.platformLength;
     while (DEF_TRUE) {
-        OSSemPend(&LCDSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+        OSTimeDlyHMSM(0, 0, 0, physConsts.lcdPeriod, OS_OPT_TIME_DLY, &err);
         while (err.Code != RTOS_ERR_NONE) {}
         if (gameData.state == active) {
-            GLIB_drawRectFilled(&glibContext, &platform);
+            GLIB_clear(&glibContext);
             // Generate cliff
-            GLIB_drawLineV(&glibContext, 0, 0, physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth);
-            GLIB_drawLineV(&glibContext, 1, 0, physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth);
+            GLIB_drawLineV(&glibContext, 0, screenSize - physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth, screenSize);
+            GLIB_drawLineV(&glibContext, 1, screenSize - physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth, screenSize);
             // Generate right wall
+            GLIB_drawLineV(&glibContext, screenSize, 0, screenSize);
             GLIB_drawLineV(&glibContext, screenSize - 1, 0, screenSize - 1);
             // Generate castle
             // Left wall
              rectangles[0].xMin = 0;
              rectangles[0].xMax = physConsts.castleConst.foundationHitsRequired * 2;
-             rectangles[0].yMin = physConsts.castleConst.castleHeight;
-             rectangles[0].yMax = screenSize - 1;
+             rectangles[0].yMin = 0;
+             rectangles[0].yMax = screenSize - physConsts.castleConst.castleHeight;
             // Ceiling
              rectangles[1].xMin = 0;
              rectangles[1].xMax = 20;
-             rectangles[1].yMin = screenSize - 6;
-             rectangles[1].yMax = screenSize - 1;
+             rectangles[1].yMin = 0;
+             rectangles[1].yMax = 5;
             // Right wall
              rectangles[2].xMin = 15;
              rectangles[2].xMax = 20;
-             rectangles[2].yMin = physConsts.castleConst.castleHeight;
-             rectangles[2].yMax = screenSize - 1;
+             rectangles[2].yMin = 0;
+             rectangles[2].yMax = screenSize - physConsts.castleConst.castleHeight;
             // Floor
              rectangles[3].xMin = 0;
              rectangles[3].xMax = 20;
-             rectangles[3].yMin = physConsts.castleConst.castleHeight;
-             rectangles[3].yMax = physConsts.castleConst.castleHeight + 5;
+             rectangles[3].yMin = screenSize - physConsts.castleConst.castleHeight - 5;
+             rectangles[3].yMax = screenSize - physConsts.castleConst.castleHeight;
             // Flag pole
              rectangles[4].xMin = 20;
              rectangles[4].xMax = 35;
-             rectangles[4].yMin = screenSize - 3;
-             rectangles[4].yMax = screenSize - 1;
+             rectangles[4].yMin = 0;
+             rectangles[4].yMax = 2;
             // Flag
              rectangles[5].xMin = 25;
              rectangles[5].xMax = 35;
-             rectangles[5].yMin = physConsts.castleConst.castleHeight;
-             rectangles[5].yMax = screenSize - 1;
+             rectangles[5].yMin = 0;
+             rectangles[5].yMax = screenSize - physConsts.castleConst.castleHeight - 10;
             // Generate Foundation
              rectangles[6].xMin = 0;
              rectangles[6].xMax = (physConsts.castleConst.foundationHitsRequired - gameData.foundationDamage) * 2;
-             rectangles[6].yMin = physConsts.castleConst.castleHeight - physConsts.castleConst.foundationDepth;
-             rectangles[6].yMax = physConsts.castleConst.castleHeight;
-            // Generate platform
-              rectangles[7].xMin = physDataArray[0].x - physConsts.platformConst.platformLength / 2;
-              rectangles[7].xMax = physDataArray[0].x + physConsts.platformConst.platformLength / 2;
-              rectangles[7].yMin = 0;
-              rectangles[7].yMax = 4;
+             rectangles[6].yMin = screenSize - physConsts.castleConst.castleHeight;
+             rectangles[6].yMax = screenSize - physConsts.castleConst.castleHeight + physConsts.castleConst.foundationDepth;
             // Draw castle
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < 7; i++) {
                 GLIB_drawRectFilled(&glibContext, &rectangles[i]);
             }
-            // Draw Cannon 5 pixels thick
-            for (int i = -2; i < 3; i++) {
-                GLIB_drawLine(&glibContext, physDataArray[i].x + i, 0, physDataArray[i].x + cannonLength * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180) + i, cannonLength * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180));
+            // Generate platform
+              platform.xMin = physDataArray[0].x - physConsts.platformConst.platformLength / 2;
+              platform.xMax = physDataArray[0].x + physConsts.platformConst.platformLength / 2;
+              platform.yMin = screenSize - 4;
+              platform.yMax = screenSize;
+            GLIB_drawRectFilled(&glibContext, &platform);
+            // Draw Cannon 3 pixels thick
+            for (int i = -1; i < 3; i++) {
+                GLIB_drawLine(&glibContext, physDataArray[0].x + (int32_t)cannonLength * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180) + i, screenSize - 4 + (int32_t)(cannonLength * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180)), physDataArray[0].x + i, screenSize - 4);
             }
             // Draw Projectiles
             for (int i = 0; i < 10; i++) {
@@ -815,43 +746,82 @@ void  LCDDisplayTask (void  *p_arg)
             }
             // Draw Battery
             // Remaining battery
-             battery[0].xMin = screenSize - 17;
+             battery[0].xMin = screenSize - 13;
              battery[0].xMax = screenSize - 8;
-             battery[0].yMin = screenSize - 32;
-             battery[0].yMax = screenSize - 32 + (gameData.energy / physConsts.generatorConst.energyCapacity * 20);
-            // Outer battery shell
-             battery[1].xMin = screenSize - 19;
-             battery[1].xMax = screenSize - 6;
-             battery[1].yMin = screenSize - 24;
-             battery[1].yMax = screenSize - 11;
-            // Inner battery shell
-             battery[2].xMin = screenSize - 18;
-             battery[2].xMax = screenSize - 7;
-             battery[2].yMin = screenSize - 23;
-             battery[2].yMax = screenSize - 12;
+             battery[0].yMin = 31 - (gameData.energy / physConsts.generatorConst.energyCapacity * 20);
+             battery[0].yMax = 32;
+             // Left Battery wall
+             battery[1].xMin = screenSize - 16;
+             battery[1].xMax = screenSize - 15;
+             battery[1].yMin = 10;
+             battery[1].yMax = 35;
+            // Top Battery
+             battery[2].xMin = screenSize - 16;
+             battery[2].xMax = screenSize - 5;
+             battery[2].yMin = 10;
+             battery[2].yMax = 11;
+            // Right Battery wall
+            battery[3].xMin = screenSize - 6;
+            battery[3].xMax = screenSize - 5;
+            battery[3].yMin = 10;
+            battery[3].yMax = 35;
+            // Bottom Battery
+            battery[4].xMin = screenSize - 16;
+            battery[4].xMax = screenSize - 5;
+            battery[4].yMin = 34;
+            battery[4].yMax = 35;
             // Battery bump
-             battery[3].xMin = screenSize - 14;
-             battery[3].xMax = screenSize - 11;
-             battery[3].yMin = screenSize - 7;
-             battery[3].yMax = screenSize - 4;
-             for (int i = 0; i < 4; i++) {
+             battery[5].xMin = screenSize - 13;
+             battery[5].xMax = screenSize - 8;
+             battery[5].yMin = 5;
+             battery[5].yMax = 10;
+             for (int i = 0; i < 6; i++) {
                 GLIB_drawRectFilled(&glibContext, &battery[i]);
              }
+             DMD_updateDisplay();
         }
     }
 }
 
-void LED0TimerCallback (void  *p_tmr, void  *p_arg);
+#define  LED0_PRIO            21u  /*   Task Priority.                 */
+#define  LED0_STK_SIZE       256u  /*   Stack size in CPU_STK.         */
+OS_TCB   LED0TaskTCB;                            /*   Task Control Block.   */
+CPU_STK  LED0TaskStk[LED0_STK_SIZE]; /*   Stack.  */
+void LED0Task (void  *p_arg);
+/***************************************************************************//**
+ * @brief
+ *   Creates the LCDDisplayTask
+ ******************************************************************************/
+void  LED0TaskCreate (void)
+{
+    RTOS_ERR     err;
+
+    OSTaskCreate(&LED0TaskTCB,                /* Pointer to the task's TCB.  */
+                 "lED 0 Task.",                    /* Name to help debugging.     */
+                 &LED0Task,                   /* Pointer to the task's code. */
+                  DEF_NULL,                          /* Pointer to task's argument. */
+                  LED0_PRIO,             /* Task's priority.            */
+                 &LED0TaskStk[0],             /* Pointer to base of stack.   */
+                 (LED0_STK_SIZE / 10u),  /* Stack limit, from base.     */
+                  LED0_STK_SIZE,         /* Stack size, in CPU_STK.     */
+                  10u,                               /* Messages in task queue.     */
+                  0u,                                /* Round-Robin time quanta.    */
+                  DEF_NULL,                          /* External TCB data.          */
+                  OS_OPT_TASK_STK_CHK,               /* Task options.               */
+                 &err);
+    if (err.Code != RTOS_ERR_NONE) {
+        /* Handle error on task creation. */
+    }
+}
 /***************************************************************************//**
  * @brief
  *   timer callback function. Posts a flag to the LED task to turn on the LED
  *    when the timer expires. Used to wait ~3 during held slider before turning
  *   on the LED1;
  ******************************************************************************/
-void LED0TimerCallback (void  *p_tmr, void  *p_arg)
+void LED0Task (void  *p_arg)
 {
     (void)&p_arg;
-    (void)&p_tmr;
     RTOS_ERR err;
     static int counter;
     counter++;
@@ -859,7 +829,36 @@ void LED0TimerCallback (void  *p_tmr, void  *p_arg)
 
 }
 
-void LED1TimerCallback (void  *p_tmr, void  *p_arg);
+#define  LED1_PRIO            21u  /*   Task Priority.                 */
+#define  LED1_STK_SIZE       256u  /*   Stack size in CPU_STK.         */
+OS_TCB   LED1TaskTCB;                            /*   Task Control Block.   */
+CPU_STK  LED1TaskStk[LED1_STK_SIZE]; /*   Stack.  */
+void LED1Task (void  *p_arg);
+/***************************************************************************//**
+ * @brief
+ *   Creates the LCDDisplayTask
+ ******************************************************************************/
+void  LED1TaskCreate (void)
+{
+    RTOS_ERR     err;
+
+    OSTaskCreate(&LED1TaskTCB,                /* Pointer to the task's TCB.  */
+                 "lED 1 Task.",                    /* Name to help debugging.     */
+                 &LED1Task,                   /* Pointer to the task's code. */
+                  DEF_NULL,                          /* Pointer to task's argument. */
+                  LED1_PRIO,             /* Task's priority.            */
+                 &LED1TaskStk[0],             /* Pointer to base of stack.   */
+                 (LED1_STK_SIZE / 10u),  /* Stack limit, from base.     */
+                  LED1_STK_SIZE,         /* Stack size, in CPU_STK.     */
+                  10u,                               /* Messages in task queue.     */
+                  0u,                                /* Round-Robin time quanta.    */
+                  DEF_NULL,                          /* External TCB data.          */
+                  OS_OPT_TASK_STK_CHK,               /* Task options.               */
+                 &err);
+    if (err.Code != RTOS_ERR_NONE) {
+        /* Handle error on task creation. */
+    }
+}
 /***************************************************************************//**
  * @brief
  *   timer callback function. Posts a flag to the LED task to turn on the LED
@@ -868,10 +867,9 @@ void LED1TimerCallback (void  *p_tmr, void  *p_arg);
  ******************************************************************************/
 int startBelow50 = 0;
 int evacTime = 5; // seconds
-void LED1TimerCallback (void  *p_tmr, void  *p_arg)
+void LED1Task (void  *p_arg)
 {
     (void)&p_arg;
-    (void)&p_tmr;
     RTOS_ERR err;
     static int counter;
     counter++;
@@ -952,9 +950,9 @@ void  buttonTask (void  *p_arg)
    RTOS_ERR     err;
 
    while (DEF_TRUE) {
-#ifndef TEST_MODE
        OSSemPend(&buttonSem, 0, OS_OPT_PEND_BLOCKING, NULL, &err);
        while (err.Code != RTOS_ERR_NONE) {}
+#ifndef TEST_MODE
        OSMutexPend(&buttonStructMutex, OS_OPT_PEND_BLOCKING, 0, NULL, &err);
        while (err.Code != RTOS_ERR_NONE) {}
        if (GPIO_PinInGet(BUTTON1_port, BUTTON1_pin) != buttonStates.button1State) {
@@ -980,12 +978,12 @@ void  buttonTask (void  *p_arg)
 #ifdef TEST_MODE
        if (GPIO_PinInGet(BUTTON1_port, BUTTON1_pin)) {
            GPIO_PinOutSet(LED1_port, LED1_pin);
-       } else {
+       } else if (!GPIO_PinInGet(BUTTON1_port, BUTTON1_pin)){
            GPIO_PinOutClear(LED1_port, LED1_pin);
        }
        if (GPIO_PinInGet(BUTTON0_port, BUTTON0_pin)) {
            GPIO_PinOutSet(LED0_port, LED0_pin);
-       } else {
+       } else if (!GPIO_PinInGet(BUTTON0_port, BUTTON0_pin)) {
            GPIO_PinOutClear(LED0_port, LED0_pin);
        }
 #endif
@@ -993,7 +991,7 @@ void  buttonTask (void  *p_arg)
    if (err.Code) {}
 }
 
-#define  SLIDER_PRIO            20u  /*   Task Priority.                 */
+#define  SLIDER_PRIO            21u  /*   Task Priority.                 */
 #define  SLIDER_STK_SIZE       256u  /*   Stack size in CPU_STK.         */
 OS_TCB   sliderTaskTCB;                            /*   Task Control Block.   */
 CPU_STK  sliderTaskStk[SLIDER_STK_SIZE]; /*   Stack.  */
@@ -1034,11 +1032,11 @@ void  sliderTask (void  *p_arg)
     /* Use argument. */
    (void)&p_arg;
    RTOS_ERR     err;
-   OSTmrStart(&sliderTimer, &err);
-   while (err.Code != RTOS_ERR_NONE) {}
     while (DEF_TRUE) {
 #ifndef TEST_MODE
-        OSSemPend(&sliderSem, 0, OS_OPT_PEND_BLOCKING, NULL, &err);
+        OSTimeDlyHMSM(0, 0, 0, physConsts.sliderPeriod, OS_OPT_TIME_DLY, &err);
+        while (err.Code != RTOS_ERR_NONE) {}
+        OSSchedLock(&err); // Locking scheduler because it causes problems if there is a context switch during slider
         while (err.Code != RTOS_ERR_NONE) {}
         CAPSENSE_Sense();
         // Read the capacitive touch sensor
@@ -1073,6 +1071,9 @@ void  sliderTask (void  *p_arg)
         while (err.Code != RTOS_ERR_NONE) {}
 #endif
 #ifdef TEST_MODE
+        OSSemPend(&sliderSem, 0, OS_OPT_PEND_BLOCKING, NULL, &err);
+        while (err.Code != RTOS_ERR_NONE) {}
+        CAPSENSE_Sense();
         bool chan0 = CAPSENSE_getPressed(0);
         bool chan1 = CAPSENSE_getPressed(1);
         bool chan2 = CAPSENSE_getPressed(2);
@@ -1088,6 +1089,8 @@ void  sliderTask (void  *p_arg)
             GPIO_PinOutSet(LED0_port, LED0_pin);
         }
 #endif
+        OSSchedUnlock(&err);
+        while (err.Code != RTOS_ERR_NONE) {}
     }
 }
 
@@ -1151,7 +1154,6 @@ void app_init(void)
 
   // Initialize our LCD system
   LCD_init();
-
   // Initialize Physical constants
   physConsts = physicsConstantsInit();
 
@@ -1163,18 +1165,6 @@ void app_init(void)
   OSMutexCreate(&physicsStructMutex, "Physics Mutex", &err);
   while (err.Code != RTOS_ERR_NONE) {}
 
-  // Timer Creation
-  OSTmrCreate(&physicsTimer, "Physics Timer", 0, physConsts.physicsPeriod, OS_OPT_TMR_PERIODIC, &physicsTimerCallback, DEF_NULL, &err);
-  while (err.Code != RTOS_ERR_NONE) {}
-  OSTmrCreate(&LCDTimer, "LCD Timer", 0, physConsts.lcdPeriod, OS_OPT_TMR_PERIODIC, &LCDTimerCallback, DEF_NULL, &err);
-  while (err.Code != RTOS_ERR_NONE) {}
-  OSTmrCreate(&sliderTimer, "Slider Timer", 0, physConsts.sliderPeriod, OS_OPT_TMR_PERIODIC, &sliderTimerCallback, DEF_NULL, &err);
-  while (err.Code != RTOS_ERR_NONE) {}
-  OSTmrCreate(&LED0Timer, "LED0 Timer", 0, LED0_PERIOD, OS_OPT_TMR_PERIODIC, &LED0TimerCallback, DEF_NULL, &err);
-  while (err.Code != RTOS_ERR_NONE) {}
-  OSTmrCreate(&LED1Timer, "LED1 Timer", 0, LED1_PERIOD, OS_OPT_TMR_PERIODIC, &LED1TimerCallback, DEF_NULL, &err);
-  while (err.Code != RTOS_ERR_NONE) {}
-
   // Semaphore Creation
   OSSemCreate(&buttonSem, "Button Semaphore", 0, &err);
   while (err.Code != RTOS_ERR_NONE) {}
@@ -1184,11 +1174,15 @@ void app_init(void)
   while (err.Code != RTOS_ERR_NONE) {}
   OSSemCreate(&LCDSem, "LCD Semaphore", 0, &err);
   while (err.Code != RTOS_ERR_NONE) {}
+  OSSemCreate(&gameEndSem, "Game End Semaphore", 0, &err);
+  while (err.Code != RTOS_ERR_NONE) {}
 
   // Task Creation
   idleTaskCreate();
   sliderTaskCreate();
   buttonTaskCreate();
+  LED0TaskCreate();
+  LED1TaskCreate();
 #ifndef TEST_MODE
   physicsTaskCreate();
     LCDTaskCreate();
