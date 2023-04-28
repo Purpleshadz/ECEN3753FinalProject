@@ -467,8 +467,8 @@ void  physicsTask (void  *p_arg)
                         localDataArray[j].yVel = 0;
                         localDataArray[j].xAcc = 0;
                         localDataArray[j].yAcc = 0;
-                        localDataArray[j].xForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
-                        localDataArray[j].yForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
+                        localDataArray[j].xForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * (int)cos(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
+                        localDataArray[j].yForce = (gameData.shotCharge / physConsts.generatorConst.maxShotPower) * physConsts.generatorConst.maxShotPower * (int)sin(physConsts.railGunConst.railgunAngle * 3.14159 / 180);
                         localDataArray[j].mass = physConsts.railGunConst.shotMass;
                         localDataArray[0].xForce += localDataArray[j].xForce;
                         gameData.shotCharge = 0;
@@ -1052,10 +1052,6 @@ void  sliderTask (void  *p_arg)
    (void)&p_arg;
    RTOS_ERR     err;
    // Initialize slider state struct
-    bool chan0 = false;
-    bool chan1 = false;
-    bool chan2 = false;
-    bool chan3 = false;
     while (DEF_TRUE) {
         sliderState.farLeft = 0;
         sliderState.left = 0;
@@ -1066,28 +1062,23 @@ void  sliderTask (void  *p_arg)
         while (err.Code != RTOS_ERR_NONE) {}
         OSMutexPend(&sliderMutex, OS_OPT_PEND_BLOCKING, 0, NULL, &err);
         CAPSENSE_Sense();
-        // Read the capacitive touch sensor
-        chan0 = CAPSENSE_getPressed(0);
-        chan1 = CAPSENSE_getPressed(1);
-        chan2 = CAPSENSE_getPressed(2);
-        chan3 = CAPSENSE_getPressed(3);
         // Map the capacitive touch sensor readings to the direction struct
-        if (chan0) {
+        if (CAPSENSE_getPressed(0)) {
             sliderState.farLeft = 1;
         } else {
             sliderState.farLeft = 0;
         }
-        if (chan1) {
+        if (CAPSENSE_getPressed(1)) {
             sliderState.left = 1;
         } else {
             sliderState.left = 0;
         }
-        if (chan2) {
+        if (CAPSENSE_getPressed(2)) {
             sliderState.right = 1;
         } else {
             sliderState.right = 0;
         }
-        if (chan3) {
+        if (CAPSENSE_getPressed(3)) {
             sliderState.farRight = 1;
         } else {
             sliderState.farRight = 0;
@@ -1097,13 +1088,7 @@ void  sliderTask (void  *p_arg)
 #ifdef TEST_MODE
         OSTimeDlyHMSM(0, 0, 0, physConsts.sliderPeriod, OS_OPT_TIME_DLY, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        // OSSchedLock(&err); // Locking scheduler because it causes problems if there is a context switch during slider
-        while (err.Code != RTOS_ERR_NONE) {}
         CAPSENSE_Sense();
-        chan0 = CAPSENSE_getPressed(0);
-        chan1 = CAPSENSE_getPressed(1);
-        chan2 = CAPSENSE_getPressed(2);
-        chan3 = CAPSENSE_getPressed(3);
         if (CAPSENSE_getPressed(0) || CAPSENSE_getPressed(1)) {
             GPIO_PinOutSet(LED1_port, LED1_pin);
         } else {
@@ -1115,7 +1100,6 @@ void  sliderTask (void  *p_arg)
             GPIO_PinOutClear(LED0_port, LED0_pin);
         }
 #endif
-        // OSSchedUnlock(&err);
         while (err.Code != RTOS_ERR_NONE) {}
     }
 }
