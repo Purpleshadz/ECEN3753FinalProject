@@ -34,7 +34,7 @@
 #include "stdio.h"
 #include "FIFO.h"
 
-//#define TEST_MODE // Comment out to disable test mode
+// #define TEST_MODE // Comment out to disable test mode
 
 #define PHYSICS_VERSION 1
 
@@ -343,8 +343,8 @@ struct gameData {
     int usefulShields;
     int shotsFired;
 } gameData;
-void spawnSatchel(struct physicsData *satchel);
-void spawnSatchel(struct physicsData *satchel) {
+void spawnSatchel(struct physicsData *phys);
+void spawnSatchel(struct physicsData *phys) {
     // Decide random landing spot. Allow for beyond canyon size to give a chance to bounce off of wall
     int landingSpot = rand() % (int)(physConsts.canyonSize * .2) - (physConsts.canyonSize * .1);
     landingSpot = landingSpot + physDataArray[0].x; // Landing spot is relative to player
@@ -355,30 +355,29 @@ void spawnSatchel(struct physicsData *satchel) {
     // Calculate Y speed to arrive in flight duration time
     int ySpeed = (-physConsts.castleConst.castleHeight / flightDuration) - (gravity * flightDuration / 2);
 
-    satchel->objectType = satchel;
-    satchel->x = 0;
-    satchel->y = physConsts.castleConst.castleHeight;
-    satchel->xVel = xSpeed;
-    satchel->yVel = ySpeed;
-    satchel->xAcc = gravity;
-    satchel->yAcc = 0;
-    satchel->xForce = 0;
-    satchel->yForce = 0;
-    satchel->mass = physConsts.satchelConst.satchelWeight;
-    break;
+    phys->objectType = satchel;
+    phys->x = 0;
+    phys->y = physConsts.castleConst.castleHeight;
+    phys->xVel = xSpeed;
+    phys->yVel = ySpeed;
+    phys->xAcc = gravity;
+    phys->yAcc = 0;
+    phys->xForce = 0;
+    phys->yForce = 0;
+    phys->mass = physConsts.satchelConst.satchelWeight;
 }
 void clearPhysicsData(struct physicsData *physData);
 void clearPhysicsData(struct physicsData *physData) {
-    physData.objectType = empty;
-    physData.x = 0;
-    physData.y = 0;
-    physData.xVel = 0;
-    physData.yVel = 0;
-    physData.xAcc = 0;
-    physData.yAcc = 0;
-    physData.xForce = 0;
-    physData.yForce = 0;
-    physData.mass = 0;
+    physData->objectType = empty;
+    physData->x = 0;
+    physData->y = 0;
+    physData->xVel = 0;
+    physData->yVel = 0;
+    physData->xAcc = 0;
+    physData->yAcc = 0;
+    physData->xForce = 0;
+    physData->yForce = 0;
+    physData->mass = 0;
 }
 
 void  physicsTask (void  *p_arg)
@@ -504,7 +503,7 @@ void  physicsTask (void  *p_arg)
             gameData.energy--;
         } else if (charging == true && gameData.energy == 0) {
             // Do nothing
-        } else if (charging == false && gameData.energy < physConsts.generatorConst.energyCapacity) {
+        } else if (charging == false && gameData.energy <= physConsts.generatorConst.energyCapacity) {
             gameData.energy++;
         }
 
@@ -574,22 +573,22 @@ void  physicsTask (void  *p_arg)
                 // Check if the shot has hit the ground
                 if (localDataArray[i].objectType == satchel) { // Will allow satchel to fly above screen
                     if (localDataArray[i].x > 0 && localDataArray[i].x < 100 && localDataArray[i].y < 10) { // Lose on hit
-                        clearPhysicsData(i);
+                        clearPhysicsData(&localDataArray[i]);
                         gameData.state = fail;
                     } else if ((localDataArray[i].y + physConsts.satchelConst.satchelDisplayDiameter / 2) < 0) { // Destroy on ground
-                        clearPhysicsData(i);
+                        clearPhysicsData(&localDataArray[i]);
                     } else if ((localDataArray[i].x + physConsts.satchelConst.satchelDisplayDiameter / 2) > physConsts.canyonSize){ // bounce off wall if hit
                         localDataArray[i].xVel = -localDataArray[i].xVel;
                         localDataArray[i].x = physConsts.canyonSize - localDataArray[i].x % physConsts.canyonSize;
                     }
                 } else if (localDataArray[i].objectType == shot) {
                     if (localDataArray[i].x <= 0  && localDataArray[i].y >= physConsts.castleConst.castleHeight && physDataArray[i].y <= physConsts.canyonSize) { // Lose on hit
-                        clearPhysicsData(i);
+                        clearPhysicsData(&localDataArray[i]);
                         gameData.foundationDamage++;
                     } else if (localDataArray[i].y <= 0) { // Destroy on ground
-                        clearPhysicsData(i);
+                        clearPhysicsData(&localDataArray[i]);
                     } else if (localDataArray[i].x <= 0  && localDataArray[i].y < physConsts.castleConst.castleHeight){ // Destroy of below castle
-                        clearPhysicsData(i);
+                        clearPhysicsData(&localDataArray[i]);
                     }
                 }
             } else if (localDataArray[i].objectType == player) {
@@ -615,7 +614,7 @@ void  physicsTask (void  *p_arg)
         OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
         for (int i = 0; i < 10; i++) {
-            physicsDataArray[i] = localDataArray[i];
+            physDataArray[i] = localDataArray[i];
         }
         OSMutexPost(&physicsStructMutex, OS_OPT_POST_NONE, &err);
         while (err.Code != RTOS_ERR_NONE) {}
@@ -894,22 +893,22 @@ void LED1Task (void  *p_arg)
     static int counter;
     counter++;
 
-    if (gameData.foundationDamage >= physConsts.castleConst.foundationHitsRequired * .5) {
-        if (startBelow50 == 0) {
-            startBelow50 = counter;
-        }
-        if (counter - startBelow50 > evacTime * 2) {
-            gameData.evacComplete = true;
-            GPIO_PinOutSet(LED1_port, LED1_pin);
-        } else if (counter - startBelow50 > evacTime) {
-            if (counter % 2 == 0) {
-                GPIO_PinOutSet(LED1_port, LED1_pin);
-            } else {
-                GPIO_PinOutClear(LED1_port, LED1_pin);
-            } 
-        }
-
-    } 
+//    if (gameData.foundationDamage >= physConsts.castleConst.foundationHitsRequired * .5) {
+//        if (startBelow50 == 0) {
+//            startBelow50 = counter;
+//        }
+//        if (counter - startBelow50 > evacTime * 2) {
+//            gameData.evacComplete = true;
+//            GPIO_PinOutSet(LED1_port, LED1_pin);
+//        } else if (counter - startBelow50 > evacTime) {
+//            if (counter % 2 == 0) {
+//                GPIO_PinOutSet(LED1_port, LED1_pin);
+//            } else {
+//                GPIO_PinOutClear(LED1_port, LED1_pin);
+//            }
+//        }
+//
+//    }
 
 }
 
@@ -996,22 +995,22 @@ void  buttonTask (void  *p_arg)
        while (err.Code != RTOS_ERR_NONE) {}
 #endif
 #ifdef TEST_MODE
-       if (GPIO_PinInGet(BUTTON1_port, BUTTON1_pin)) {
-           GPIO_PinOutSet(LED1_port, LED1_pin);
-       } else if (!GPIO_PinInGet(BUTTON1_port, BUTTON1_pin)){
-           GPIO_PinOutClear(LED1_port, LED1_pin);
-       }
-       if (GPIO_PinInGet(BUTTON0_port, BUTTON0_pin)) {
-           GPIO_PinOutSet(LED0_port, LED0_pin);
-       } else if (!GPIO_PinInGet(BUTTON0_port, BUTTON0_pin)) {
-           GPIO_PinOutClear(LED0_port, LED0_pin);
-       }
+    //    if (GPIO_PinInGet(BUTTON1_port, BUTTON1_pin)) {
+    //        GPIO_PinOutSet(LED1_port, LED1_pin);
+    //    } else if (!GPIO_PinInGet(BUTTON1_port, BUTTON1_pin)){
+    //        GPIO_PinOutClear(LED1_port, LED1_pin);
+    //    }
+    //    if (GPIO_PinInGet(BUTTON0_port, BUTTON0_pin)) {
+    //        GPIO_PinOutSet(LED0_port, LED0_pin);
+    //    } else if (!GPIO_PinInGet(BUTTON0_port, BUTTON0_pin)) {
+    //        GPIO_PinOutClear(LED0_port, LED0_pin);
+    //   }
 #endif
     }
    if (err.Code) {}
 }
 
-#define  SLIDER_PRIO            21u  /*   Task Priority.                 */
+#define  SLIDER_PRIO            20u  /*   Task Priority.                 */
 #define  SLIDER_STK_SIZE       256u  /*   Stack size in CPU_STK.         */
 OS_TCB   sliderTaskTCB;                            /*   Task Control Block.   */
 CPU_STK  sliderTaskStk[SLIDER_STK_SIZE]; /*   Stack.  */
@@ -1052,21 +1051,27 @@ void  sliderTask (void  *p_arg)
     /* Use argument. */
    (void)&p_arg;
    RTOS_ERR     err;
+   // Initialize slider state struct
+    bool chan0 = false;
+    bool chan1 = false;
+    bool chan2 = false;
+    bool chan3 = false;
     while (DEF_TRUE) {
+        sliderState.farLeft = 0;
+        sliderState.left = 0;
+        sliderState.right = 0;
+        sliderState.farRight = 0;
 #ifndef TEST_MODE
         OSTimeDlyHMSM(0, 0, 0, physConsts.sliderPeriod, OS_OPT_TIME_DLY, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        OSSchedLock(&err); // Locking scheduler because it causes problems if there is a context switch during slider
-        while (err.Code != RTOS_ERR_NONE) {}
+        OSMutexPend(&sliderMutex, OS_OPT_PEND_BLOCKING, 0, NULL, &err);
         CAPSENSE_Sense();
         // Read the capacitive touch sensor
-        bool chan0 = CAPSENSE_getPressed(0);
-        bool chan1 = CAPSENSE_getPressed(1);
-        bool chan2 = CAPSENSE_getPressed(2);
-        bool chan3 = CAPSENSE_getPressed(3);
+        chan0 = CAPSENSE_getPressed(0);
+        chan1 = CAPSENSE_getPressed(1);
+        chan2 = CAPSENSE_getPressed(2);
+        chan3 = CAPSENSE_getPressed(3);
         // Map the capacitive touch sensor readings to the direction struct
-        OSMutexPend(&sliderMutex, 0, OS_OPT_PEND_BLOCKING, NULL, &err);
-        while (err.Code != RTOS_ERR_NONE) {}
         if (chan0) {
             sliderState.farLeft = 1;
         } else {
@@ -1088,28 +1093,29 @@ void  sliderTask (void  *p_arg)
             sliderState.farRight = 0;
         }
         OSMutexPost(&sliderMutex, OS_OPT_POST_NONE, &err);
-        while (err.Code != RTOS_ERR_NONE) {}
 #endif
 #ifdef TEST_MODE
-        OSSemPend(&sliderSem, 0, OS_OPT_PEND_BLOCKING, NULL, &err);
+        OSTimeDlyHMSM(0, 0, 0, physConsts.sliderPeriod, OS_OPT_TIME_DLY, &err);
+        while (err.Code != RTOS_ERR_NONE) {}
+        // OSSchedLock(&err); // Locking scheduler because it causes problems if there is a context switch during slider
         while (err.Code != RTOS_ERR_NONE) {}
         CAPSENSE_Sense();
-        bool chan0 = CAPSENSE_getPressed(0);
-        bool chan1 = CAPSENSE_getPressed(1);
-        bool chan2 = CAPSENSE_getPressed(2);
-        bool chan3 = CAPSENSE_getPressed(3);
-        if (chan0 || chan1) {
+        chan0 = CAPSENSE_getPressed(0);
+        chan1 = CAPSENSE_getPressed(1);
+        chan2 = CAPSENSE_getPressed(2);
+        chan3 = CAPSENSE_getPressed(3);
+        if (CAPSENSE_getPressed(0) || CAPSENSE_getPressed(1)) {
             GPIO_PinOutSet(LED1_port, LED1_pin);
         } else {
             GPIO_PinOutClear(LED1_port, LED1_pin);
         }
-        if (chan2 || chan3) {
+        if (CAPSENSE_getPressed(2) || CAPSENSE_getPressed(3)) {
             GPIO_PinOutSet(LED0_port, LED0_pin);
         } else {
-            GPIO_PinOutSet(LED0_port, LED0_pin);
+            GPIO_PinOutClear(LED0_port, LED0_pin);
         }
 #endif
-        OSSchedUnlock(&err);
+        // OSSchedUnlock(&err);
         while (err.Code != RTOS_ERR_NONE) {}
     }
 }
