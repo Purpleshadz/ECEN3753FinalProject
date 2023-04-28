@@ -518,6 +518,7 @@ void  physicsTask (void  *p_arg)
                       for (int i = 0; i < 10; i++) {
                         if (localDataArray[i].objectType == empty) {
                             spawnSatchel(&localDataArray[i]);
+                            break;
                         }
                       }
                   }
@@ -843,9 +844,19 @@ void LED0Task (void  *p_arg)
     (void)&p_arg;
     RTOS_ERR err;
     static int counter;
-    counter++;
-
-
+    while (DEF_TRUE) {
+        OSTimeDlyHMSM(0, 0, 0, 50, OS_OPT_TIME_DLY, &err);
+        while (err.Code != RTOS_ERR_NONE) {}
+        counter++;
+        if (gameData.shotCharge == 0) {
+            continue;
+        }
+        if (!(counter % (10 - (10 *(gameData.shotCharge / physConsts.generatorConst.maxShotPower))))) {
+            GPIO_PinOutSet(LED0_port, LED0_pin);
+        } else {
+            GPIO_PinOutClear(LED0_port, LED0_pin);
+        }
+    }
 }
 
 #define  LED1_PRIO            21u  /*   Task Priority.                 */
@@ -884,31 +895,36 @@ void  LED1TaskCreate (void)
  *    when the timer expires. Used to wait ~3 during held slider before turning
  *   on the LED1;
  ******************************************************************************/
-int startBelow50 = 0;
 int evacTime = 5; // seconds
 void LED1Task (void  *p_arg)
 {
     (void)&p_arg;
     RTOS_ERR err;
-    static int counter;
-    counter++;
-
-//    if (gameData.foundationDamage >= physConsts.castleConst.foundationHitsRequired * .5) {
-//        if (startBelow50 == 0) {
-//            startBelow50 = counter;
-//        }
-//        if (counter - startBelow50 > evacTime * 2) {
-//            gameData.evacComplete = true;
-//            GPIO_PinOutSet(LED1_port, LED1_pin);
-//        } else if (counter - startBelow50 > evacTime) {
-//            if (counter % 2 == 0) {
-//                GPIO_PinOutSet(LED1_port, LED1_pin);
-//            } else {
-//                GPIO_PinOutClear(LED1_port, LED1_pin);
-//            }
-//        }
-//
-//    }
+    int counter = 0;
+    bool LEDState = false;
+    while (DEF_TRUE) {
+        OSTimeDlyHMSM(0, 0, 0, 50, OS_OPT_TIME_DLY, &err);
+        if (gameData.foundationDamage >= physConsts.castleConst.foundationHitsRequired * .5) {
+            counter++;
+            // Turn led on and off with 1 second period 50% duty cycle
+            if (counter % 10 && gameData.evacComplete == 0) {
+                if (LEDState) {
+                    GPIO_PinOutClear(LED1_port, LED1_pin);
+                    LEDState = false;
+                } else {
+                    GPIO_PinOutSet(LED1_port, LED1_pin);
+                    LEDState = true;
+                }
+            } 
+            if (counter == evacTime * 20) {
+                gameData.evacComplete = 1;
+            }
+            
+        }
+    }
+    if (gameData.evacComplete == 1) {
+        GPIO_PinOutSet(LED1_port, LED1_pin);
+    }
 
 }
 
