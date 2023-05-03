@@ -128,9 +128,9 @@ struct physicsConstants physicsConstantsInit(void) {
                 .foundationDepth = 21
             },
             .satchelConst = {
-                .limitingMethod = AlwaysOne,
+                .limitingMethod = PeriodicThrowTime,
                 .satchelDisplayDiameter = 7,
-                .throwPeriod = 10,
+                .throwPeriod = 5,
                 .maxInFlight = 2,
                 .maxInFlightPeriod = 10,
                 .satchelWeight = 1000,
@@ -554,18 +554,20 @@ void  physicsTask (void  *p_arg)
               // Check if # of satchels in flight is less than max
               if(0 == 1) {}; // Allow for compilation due to label error
               int satchelCount = 0;
-              if (!(timer % physConsts.satchelConst.maxInFlightPeriod == 0)) {
-                  timer++;
-              }
+              timer++;
               for (int i = 0; i < 10; i++) {
                   if (localDataArray[i].objectType == satchel) {
                       satchelCount++;
                   }
               }
-              if (satchelCount < physConsts.satchelConst.maxInFlight && (timer % physConsts.satchelConst.maxInFlightPeriod)) { // If there are less than max, create a satchel
+              if (satchelCount >= physConsts.satchelConst.maxInFlight) {
+                  timer = 0;
+              }
+              if (satchelCount < physConsts.satchelConst.maxInFlight && !(timer % physConsts.satchelConst.maxInFlightPeriod)) { // If there are less than max, create a satchel
                     for (int i = 0; i < 10; i++) {
                         if (localDataArray[i].objectType == empty) {
                             spawnSatchel(&localDataArray[i]);
+                            break;
                         }
                     }
               }
@@ -573,10 +575,11 @@ void  physicsTask (void  *p_arg)
           case PeriodicThrowTime:
               // Check if it is time to throw a satchel
               if(0 == 1) {}; // Allow for compilation due to label error
-              if (timer % physConsts.satchelConst.throwPeriod == 0) {
+              if ((timer % physConsts.satchelConst.throwPeriod) == 0) {
                     for (int i = 0; i < 10; i++) {
                         if (localDataArray[i].objectType == empty) {
                             spawnSatchel(&localDataArray[i]);
+                            break;
                         }
                     }
               }
