@@ -39,44 +39,44 @@
 #define PHYSICS_VERSION 1
 
 struct castleConstants {
-    int castleHeight;
+    int castleHeight; // cm
     int foundationHitsRequired;
-    int foundationDepth;
+    int foundationDepth; // cm
 };
 enum limitingMethod {AlwaysOne, MaxInFlight, PeriodicThrowTime};
 struct satchelConstants {
     int limitingMethod;
-    int satchelDisplayDiameter;
+    int satchelDisplayDiameter; // Pixels
     int throwPeriod; // in amount of physics periods
-    int maxInFlight;
+    int maxInFlight; // amount of satchels allowed in flight
     int maxInFlightPeriod; // in amount of physics periods
     int satchelWeight;
 };
 struct platformConstants {
-    int maxPlatformForce;
-    int platformMass;
-    int platformLength;
-    int maxPlatformBounceSpeed;
-    int maxPlatformSpeed;
+    int maxPlatformForce; // Newtons
+    int platformMass; // KG
+    int platformLength; // cm
+    int maxPlatformBounceSpeed; // cm/s
+    int maxPlatformSpeed; // cm/s
 };
 struct shieldConstants {
-    int shieldEffectiveRange;
-    int shieldActivationEnergy;
+    int shieldEffectiveRange; // cm
+    int shieldActivationEnergy; // KJ
 };
 struct railGunConstants{
-    int railgunAngle;
-    int shotMass;
-    int shotRadius;
+    int railgunAngle; // radians
+    int shotMass; // kg
+    int shotRadius; // pixels
 };
 struct generatorCosntants{
-    int energyCapacity;
-    float maxShotPower;
+    int energyCapacity; // KJ
+    float maxShotPower; // watts
 };
 struct physicsConstants {
-    int physicsPeriod;
-    int sliderPeriod;
-    int lcdPeriod;
-    int canyonSize;
+    int physicsPeriod; // ms
+    int sliderPeriod; // ms
+    int lcdPeriod; // ms
+    int canyonSize; // cm
     struct castleConstants castleConst;
     struct satchelConstants satchelConst;
     struct platformConstants platformConst;
@@ -290,7 +290,7 @@ CPU_STK  physicsTaskStk[PHYSICS_TASK_STK_SIZE]; /*   Stack.  */
 void  physicsTask (void  *p_arg);
 /***************************************************************************//**
  * @brief
- *   Creates the idle task.
+ *   Creates the physics task.
  ******************************************************************************/
 void  physicsTaskCreate (void)
 {
@@ -313,10 +313,6 @@ void  physicsTaskCreate (void)
         /* Handle error on task creation. */
     }
 }
-/***************************************************************************//**
- * @brief
- *   The idle task. Enters energy mode 1
- ******************************************************************************/
 OS_MUTEX physicsStructMutex;
 enum objectType {empty, player, satchel, shot};
 struct physicsData {
@@ -344,6 +340,10 @@ struct gameData {
     int usefulShields;
     int shotsFired;
 } gameData;
+/***************************************************************************//**
+ * @brief
+ *   Spawns satchel. Called by physics task.
+ ******************************************************************************/
 void spawnSatchel(struct physicsData *phys);
 void spawnSatchel(struct physicsData *phys) {
     // Decide random landing spot. Allow for beyond canyon size to give a chance to bounce off of wall
@@ -371,6 +371,10 @@ void spawnSatchel(struct physicsData *phys) {
     phys->yForce = 0;
     phys->mass = physConsts.satchelConst.satchelWeight;
 }
+/***************************************************************************//**
+ * @brief
+ *   Clears physics data. Called by physics task whenever an object is destroyed.
+ ******************************************************************************/
 void clearPhysicsData(struct physicsData *physData);
 void clearPhysicsData(struct physicsData *physData) {
     physData->objectType = empty;
@@ -384,7 +388,10 @@ void clearPhysicsData(struct physicsData *physData) {
     physData->yForce = 0;
     physData->mass = 0;
 }
-
+/***************************************************************************//**
+ * @brief
+ *   Physics task. Handles all physics calculations.
+ ******************************************************************************/
 void  physicsTask (void  *p_arg)
 {
     /* Use argument. */
@@ -428,6 +435,7 @@ void  physicsTask (void  *p_arg)
             OSSemPend(&gameEndSem, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
             while (err.Code != RTOS_ERR_NONE) {}
         }
+        // Wait for physics period
         OSTimeDlyHMSM(0, 0, 0, physConsts.physicsPeriod, OS_OPT_TIME_DLY, &err);
        while (err.Code != RTOS_ERR_NONE) {}
         OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
@@ -447,6 +455,7 @@ void  physicsTask (void  *p_arg)
         }
         OSMutexPost(&physicsStructMutex, OS_OPT_POST_NONE, &err);
         OSMutexPend(&sliderMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+        // Use slider data to calculate platform force
         if ((sliderState.farLeft || sliderState.left) && (sliderState.farRight || sliderState.right)) {
             // do Nothing
         } else if (sliderState.left) {
@@ -457,7 +466,7 @@ void  physicsTask (void  *p_arg)
             localDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
         } else if (sliderState.farRight) {
             localDataArray[0].xForce += physConsts.platformConst.maxPlatformForce / 2;
-        } else {
+        } else { // no slider input, apply friction
             if (localDataArray[0].xVel > 0) {
                 localDataArray[0].xForce += -physConsts.platformConst.maxPlatformForce;
             } else if (localDataArray[0].xVel < 0) {
@@ -467,9 +476,10 @@ void  physicsTask (void  *p_arg)
         OSMutexPost(&sliderMutex, OS_OPT_POST_NONE, &err);
         OSMutexPend(&buttonStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
-        if (buttonStates.button0State == 1) {
+        // Use button data to calculate shot charge
+        if (buttonStates.button0State == 1) { // Start charging
             charging = true;
-        } else if (buttonStates.button0State == 0 && charging == true) {
+        } else if (buttonStates.button0State == 0 && charging == true) { // Fire shot
             charging = false;
             if (gameData.shotCharge > 0) {
                 for (int j = 0; j < 10; j++) {
@@ -490,7 +500,7 @@ void  physicsTask (void  *p_arg)
                 }
             }
         } 
-        
+        // Use button data to calculate shield activation. Destroy all satchels in range        
         if (buttonStates.button1State == 1 && gameData.energy >= physConsts.shieldConst.shieldActivationEnergy && buttonStates.button1Change == 1) {
             gameData.energy -= physConsts.shieldConst.shieldActivationEnergy;
             gameData.shieldsActivated++;
@@ -508,11 +518,10 @@ void  physicsTask (void  *p_arg)
                     }
                 }
             }
-        } else if (buttonStates.button1State == 1 && gameData.energy < physConsts.shieldConst.shieldActivationEnergy) {
-            // Do something to indicate that the player can't use the shield
         }
         OSMutexPost(&buttonStructMutex, OS_OPT_POST_NONE, &err);
         while (err.Code != RTOS_ERR_NONE) {}
+        // If charging, add charge and reduce energy. Otherwise, charge energy
         if (charging == true && gameData.energy > 0 && gameData.shotCharge < physConsts.generatorConst.maxShotPower) {
             gameData.shotCharge += physConsts.generatorConst.maxShotPower * (float)physConsts.physicsPeriod / 1.5 / 1000;
             gameData.energy -= physConsts.generatorConst.maxShotPower * (float)physConsts.physicsPeriod / 1.5 / 1000;
@@ -523,7 +532,7 @@ void  physicsTask (void  *p_arg)
         } else if (charging == false && gameData.energy <= physConsts.generatorConst.energyCapacity) {
             gameData.energy += physConsts.generatorConst.maxShotPower * (float)physConsts.physicsPeriod / 1.5 / 1000;
         }
-
+        // Check if satchel should be spawned
         switch (physConsts.satchelConst.limitingMethod) {
           case AlwaysOne:
               // Check if there is a satchel in the array
@@ -578,8 +587,9 @@ void  physicsTask (void  *p_arg)
               // Shouldn't be here
               break;
         }   
+        // Unique physics calculations for each object type
         for (int i = 0; i < 10; i++) {
-            if (localDataArray[i].objectType == shot) {
+            if (localDataArray[i].objectType == shot) { // shot physics
                 localDataArray[i].xAcc = localDataArray[i].xForce / localDataArray[i].mass;
                 localDataArray[i].yAcc = localDataArray[i].yForce / localDataArray[i].mass + gravity;
                 localDataArray[i].yVel += localDataArray[i].yAcc * ((float)physConsts.physicsPeriod / 1000);
@@ -588,7 +598,7 @@ void  physicsTask (void  *p_arg)
                 localDataArray[i].y += localDataArray[i].yVel * ((float)physConsts.physicsPeriod / 1000);
                 localDataArray[i].yForce = 0; // Forces aren't constant, so they need to be reset
                 localDataArray[i].xForce = 0; // Forces aren't constant, so they need to be reset
-                // Check if the shot has hit the ground
+                // Check if the shot has hit castle
                 if (localDataArray[i].x <= 0  && localDataArray[i].y >= physConsts.castleConst.castleHeight && physDataArray[i].y <= physConsts.canyonSize) { // hit
                     clearPhysicsData(&localDataArray[i]);
                     gameData.foundationDamage++;
@@ -600,7 +610,7 @@ void  physicsTask (void  *p_arg)
                 } else if (localDataArray[i].x <= 0  && localDataArray[i].y < physConsts.castleConst.castleHeight){ // Destroy of below castle
                     clearPhysicsData(&localDataArray[i]);
                 }
-            } else if (localDataArray[i].objectType == satchel) {
+            } else if (localDataArray[i].objectType == satchel) { // satchel physics
                 localDataArray[i].xAcc = 0;
                 localDataArray[i].yAcc = gravity;
                 localDataArray[i].yVel += localDataArray[i].yAcc * ((float)physConsts.physicsPeriod / 1000);
@@ -615,8 +625,8 @@ void  physicsTask (void  *p_arg)
                     localDataArray[i].xVel = -localDataArray[i].xVel;
                     localDataArray[i].x = physConsts.canyonSize - (int)localDataArray[i].x % physConsts.canyonSize;
                 }
-            } else if (localDataArray[i].objectType == player) {
-                localDataArray[i].xAcc = localDataArray[i].xForce / localDataArray[i].mass;
+            } else if (localDataArray[i].objectType == player) { // player physics
+                localDataArray[i].xAcc = localDataArray[i].xForce / localDataArray[i].mass; // F = ma
                 localDataArray[i].xVel += localDataArray[i].xAcc * ((float)physConsts.physicsPeriod / 1000);
                 if (localDataArray[i].xVel > physConsts.platformConst.maxPlatformSpeed) {
                     localDataArray[i].xVel = physConsts.platformConst.maxPlatformSpeed;
@@ -637,6 +647,7 @@ void  physicsTask (void  *p_arg)
         }
         OSMutexPend(&physicsStructMutex, 0, OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
         while (err.Code != RTOS_ERR_NONE) {}
+        // Copy local data to global data
         for (int i = 0; i < 10; i++) {
             physDataArray[i].mass= localDataArray[i].mass;
             physDataArray[i].x = localDataArray[i].x;
@@ -716,7 +727,7 @@ void  LCDTaskCreate (void)
 }
 /***************************************************************************//**
  * @brief
- *   
+ *   Task that displays the game on the LCD. 
  ******************************************************************************/
 void  LCDDisplayTask (void  *p_arg)
 {
@@ -830,7 +841,7 @@ void  LCDDisplayTask (void  *p_arg)
              for (int i = 0; i < 6; i++) {
                 GLIB_drawRectFilled(&glibContext, &battery[i]);
              }
-             if (gameData.shieldActive) {
+             if (gameData.shieldActive) { // Draw shield
                 GLIB_drawCircle(&glibContext, physDataArray[0].x, screenSize - 4, physConsts.shieldConst.shieldEffectiveRange);
                 gameData.shieldActive = false;
              }
@@ -918,7 +929,7 @@ CPU_STK  LED0TaskStk[LED0_STK_SIZE]; /*   Stack.  */
 void LED0Task (void  *p_arg);
 /***************************************************************************//**
  * @brief
- *   Creates the LCDDisplayTask
+ *   Creates the LED0 task.
  ******************************************************************************/
 void  LED0TaskCreate (void)
 {
@@ -943,9 +954,7 @@ void  LED0TaskCreate (void)
 }
 /***************************************************************************//**
  * @brief
- *   timer callback function. Posts a flag to the LED task to turn on the LED
- *    when the timer expires. Used to wait ~3 during held slider before turning
- *   on the LED1;
+ *   LED0Task. This task is responsible for blinking LED0 based on the charge in the railgun.
  ******************************************************************************/
 void LED0Task (void  *p_arg)
 {
@@ -974,7 +983,7 @@ CPU_STK  LED1TaskStk[LED1_STK_SIZE]; /*   Stack.  */
 void LED1Task (void  *p_arg);
 /***************************************************************************//**
  * @brief
- *   Creates the LCDDisplayTask
+ *   LED1TaskCreate. Creates the LED1Task
  ******************************************************************************/
 void  LED1TaskCreate (void)
 {
@@ -999,9 +1008,7 @@ void  LED1TaskCreate (void)
 }
 /***************************************************************************//**
  * @brief
- *   timer callback function. Posts a flag to the LED task to turn on the LED
- *    when the timer expires. Used to wait ~3 during held slider before turning
- *   on the LED1;
+ *   LED1Task. This task is responsible for blinking LED1 based on the evacuation status.
  ******************************************************************************/
 int evacTime = 5; // seconds
 void LED1Task (void  *p_arg)
@@ -1042,12 +1049,7 @@ void LED1Task (void  *p_arg)
 
 /***************************************************************************//**
  * @brief
- *   Task that handles button interrupts. It is called by both button interrupts.
- *  It pushes the button state to the appropriate FIFO and posts to the speed setpoint semaphore.
- * @param button
- *  True if button 1 was pressed, false if button 0 was pressed.
- * @param state
- * True if the button was pressed, false if it was released.
+ *   Task that handles button interrupts. It posts a semaphore to the button task
  ******************************************************************************/
 
 void GPIO_INTERRUPT_Handler() {
@@ -1063,7 +1065,7 @@ CPU_STK  buttonTaskStk[BUTTON_TASK_STK_SIZE]; /*   Stack.  */
 void  buttonTask (void  *p_arg);
 /***************************************************************************//**
  * @brief
- *   Creates the idle task.
+ *   Creates the buttonTask
  ******************************************************************************/
 void  buttonTaskCreate (void)
 {
@@ -1088,7 +1090,8 @@ void  buttonTaskCreate (void)
 }
 /***************************************************************************//**
  * @brief
- *   The idle task. Enters energy mode 1
+ *   ButtonTask. This task is responsible for handling button presses and monitoring changes in button state.
+ *  It also handles the button debugging.
  ******************************************************************************/
 void  buttonTask (void  *p_arg)
 {
@@ -1145,7 +1148,7 @@ CPU_STK  sliderTaskStk[SLIDER_STK_SIZE]; /*   Stack.  */
 void  sliderTask (void  *p_arg);
 /***************************************************************************//**
  * @brief
- *   Creates the vehicle direction task
+ *   Creates the sliderTask
  ******************************************************************************/
 void sliderTaskCreate (void)
 {
@@ -1170,9 +1173,7 @@ void sliderTaskCreate (void)
 }
 /***************************************************************************//**
  * @brief
- *   Vehicle direction task. Reads the capacitive touch sensor and sets the
- *    direction of the vehicle based on the button presses. Posts an event flag
- *   to the vehicle monitor task if the direction has changed.
+ *   SliderTask. This task is responsible for handling slider presses. It also handles the slider debugging.
  ******************************************************************************/
 void  sliderTask (void  *p_arg)
 {
@@ -1276,7 +1277,10 @@ void  idleTask (void  *p_arg)
    }
 }
 
-
+/***************************************************************************//**
+ * @brief
+ *   Main function.
+ ******************************************************************************/
 void app_init(void)
 {
   RTOS_ERR err;
