@@ -128,7 +128,7 @@ struct physicsConstants physicsConstantsInit(void) {
                 .foundationDepth = 21
             },
             .satchelConst = {
-                .limitingMethod = PeriodicThrowTime,
+                .limitingMethod = AlwaysOne,
                 .satchelDisplayDiameter = 7,
                 .throwPeriod = 5,
                 .maxInFlight = 2,
